@@ -38,9 +38,16 @@ builder.Services
     })
     .UseLightweightSessions();
 
+// Build the EF data source explicitly so we can enable dynamic JSON — required
+// to write Dictionary<string, decimal> (CardPrinting.Prices) into a jsonb column
+// under Npgsql 8+, which otherwise refuses to serialize unmapped complex types.
+var efDataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
+efDataSourceBuilder.EnableDynamicJson();
+var efDataSource = efDataSourceBuilder.Build();
+
 builder.Services.AddDbContext<LupiraMtgDbContext>(opts =>
 {
-    opts.UseNpgsql(connectionString, npgsql =>
+    opts.UseNpgsql(efDataSource, npgsql =>
     {
         npgsql.MigrationsHistoryTable("__EFMigrationsHistory", LupiraMtgDbContext.Schema);
     });
