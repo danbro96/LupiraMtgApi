@@ -6,7 +6,7 @@ services:
       Auth__Authority: ${AUTH_AUTHORITY:-https://auth.lupira.com/application/o/lupira-mtg/}
       Auth__Audience: ${AUTH_AUDIENCE:-lupira-mtg-api}
 
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=lupira_mtg;Username=lupira_mtg;Password=${LUPIRA_MTG_DB_PASSWORD:?required}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=lupira_mtg;Username=lupira_mtg_user;Password=${LUPIRA_MTG_DB_PASSWORD:?required}"
 
       Florence__Url: ${FLORENCE_URL:-http://florence-api:8080}
       Florence__ApiKey: ${FLORENCE_API_KEY:?required}

@@ -13,7 +13,7 @@ public sealed class LupiraMtgDbContextFactory : IDesignTimeDbContextFactory<Lupi
     public LupiraMtgDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Postgres")
-            ?? "Host=localhost;Database=lupira_mtg;Username=lupira_mtg;Password=designtime";
+            ?? "Host=localhost;Database=lupira_mtg;Username=lupira_mtg_user;Password=designtime";
 
         var options = new DbContextOptionsBuilder<LupiraMtgDbContext>()
             .UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable(
