@@ -1,0 +1,53 @@
+services:
+  lupira-mtg-api:
+    image: danbro96/lupira-mtg-api:${IMAGE_TAG:-latest}
+    container_name: lupira-mtg-api
+    environment:
+      Auth__Authority: ${AUTH_AUTHORITY:-https://auth.lupira.com/application/o/lupira-mtg/}
+      Auth__Audience: ${AUTH_AUDIENCE:-lupira-mtg-api}
+
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=lupira_mtg;Username=lupira_mtg;Password=${LUPIRA_MTG_DB_PASSWORD:?required}"
+
+      Florence__Url: ${FLORENCE_URL:-http://florence-api:8080}
+      Florence__ApiKey: ${FLORENCE_API_KEY:?required}
+
+      Minio__Endpoint: ${MINIO_ENDPOINT:-minio:9000}
+      Minio__PublicEndpoint: ${MINIO_PUBLIC_ENDPOINT:-https://s3.lupira.com}
+      Minio__AccessKey: ${MINIO_ACCESS_KEY:?required}
+      Minio__SecretKey: ${MINIO_SECRET_KEY:?required}
+      Minio__Bucket: ${MINIO_BUCKET:-lupira-mtg-cards}
+      Minio__UseSsl: ${MINIO_USE_SSL:-false}
+
+      RateLimit__RequestsPerMinute: ${RATE_LIMIT:-120}
+
+      ScryfallSync__CronSchedule: ${SCRYFALL_SYNC_CRON:-0 4 * * *}
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=prod,host.name=medelynas,service.name=lupira-mtg-api}
+    ports:
+      - "${HOST_PORT:-40580}:8080"
+    volumes:
+      - /mnt/tank2/appdata/lupira_mtg_api/cache:/app/cache
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - default
+      - medelynas_data
+      - medelynas_telemetry
+
+networks:
+  default:
+    driver: bridge
+  medelynas_data:
+    external: true
+    name: medelynas_data
+  medelynas_telemetry:
+    external: true
+    name: medelynas_telemetry
