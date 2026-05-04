@@ -77,6 +77,7 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(s => s.Code).HasMaxLength(16);
             e.Property(s => s.Name).HasMaxLength(128);
             e.Property(s => s.SetType).HasMaxLength(32);
+            e.Property(s => s.IconObjectKey).HasColumnType("text");
         });
 
         modelBuilder.Entity<DeviceUser>(e =>

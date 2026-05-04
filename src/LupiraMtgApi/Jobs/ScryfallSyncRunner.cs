@@ -41,9 +41,13 @@ public sealed class ScryfallSyncRunner
             var pHash = scope.ServiceProvider.GetRequiredService<PHashService>();
             var pHashIndex = scope.ServiceProvider.GetRequiredService<PHashIndex>();
 
+            var symbolRasterizer = scope.ServiceProvider.GetRequiredService<SetSymbolRasterizer>();
+            var symbolIndex = scope.ServiceProvider.GetRequiredService<SetSymbolIndex>();
+
             await images.EnsureBucketAsync(ct);
 
             await SyncSetsAsync(db, source, ct);
+            await this.SyncSetIconsAsync(db, source, images, symbolRasterizer, report, ct);
             await this.SyncPrintingsAsync(db, source, images, pHash, report, ct);
 
             report.Status = "completed";
@@ -64,6 +68,15 @@ public sealed class ScryfallSyncRunner
             catch (Exception rebuildEx)
             {
                 this.logger.LogWarning(rebuildEx, "PHashIndex rebuild after sync failed; recognition will use the previous index until next sync");
+            }
+
+            try
+            {
+                await symbolIndex.RebuildAsync(ct);
+            }
+            catch (Exception rebuildEx)
+            {
+                this.logger.LogWarning(rebuildEx, "SetSymbolIndex rebuild after sync failed; set-symbol detection will use the previous index until next sync");
             }
         }
         catch (Exception ex)
@@ -117,6 +130,68 @@ public sealed class ScryfallSyncRunner
 
         await db.SaveChangesAsync(ct);
     }
+
+    private async Task SyncSetIconsAsync(
+        LupiraMtgDbContext db,
+        ICardCatalogSource source,
+        IImageStore images,
+        SetSymbolRasterizer rasterizer,
+        SyncRunResponse report,
+        CancellationToken ct)
+    {
+        // Only fetch icons we don't already have. The Scryfall icon SVG URI is stable
+        // for the lifetime of a set, so re-running sync after the first one is a no-op
+        // for icons.
+        var pending = await db.Sets
+            .Where(s => s.IconObjectKey == null && s.IconSvgUri != null)
+            .ToListAsync(ct);
+
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var succeeded = 0;
+        foreach (var entity in pending)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                await using var svgStream = await source.DownloadImageAsync(entity.IconSvgUri!, ct);
+                using var svgBuffer = new MemoryStream();
+                await svgStream.CopyToAsync(svgBuffer, ct);
+                svgBuffer.Position = 0;
+
+                var raster = await rasterizer.RasterizeAsync(svgBuffer, ct);
+                var key = SetIconKey(entity.Code);
+                using var pngStream = new MemoryStream(raster.PngBytes, writable: false);
+                await images.PutAsync(key, pngStream, "image/png", ct);
+
+                entity.IconObjectKey = key;
+                entity.IconPHash = raster.PHash;
+                entity.IconSyncedAt = now;
+                succeeded++;
+                report.ImagesUploaded++;
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(
+                    ex,
+                    "Set icon rasterize/upload failed for {SetCode}; will retry on next sync",
+                    entity.Code);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        this.logger.LogInformation(
+            "Set icons synced: {Succeeded}/{Pending}",
+            succeeded,
+            pending.Count);
+    }
+
+    private static string SetIconKey(string setCode) => $"sets/{setCode}/icon.png";
 
     private async Task SyncPrintingsAsync(
         LupiraMtgDbContext db,

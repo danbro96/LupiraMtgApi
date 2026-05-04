@@ -15,4 +15,10 @@ public sealed class ScryfallSet
     public string? IconSvgUri { get; set; }
 
     public DateTimeOffset SyncedAt { get; set; }
+
+    public string? IconObjectKey { get; set; }
+
+    public long? IconPHash { get; set; }
+
+    public DateTimeOffset? IconSyncedAt { get; set; }
 }

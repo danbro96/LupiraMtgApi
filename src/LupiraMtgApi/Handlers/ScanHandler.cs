@@ -24,6 +24,7 @@ public sealed class ScanHandler
     private readonly CardCropService crop;
     private readonly CardZoneClassifier zoneClassifier;
     private readonly CardZoneScorer zoneScorer;
+    private readonly SetSymbolDetector symbolDetector;
     private readonly CardPrintingMapper mapper;
     private readonly ScanScoringOptions scoring;
     private readonly ILogger<ScanHandler> logger;
@@ -36,6 +37,7 @@ public sealed class ScanHandler
         CardCropService crop,
         CardZoneClassifier zoneClassifier,
         CardZoneScorer zoneScorer,
+        SetSymbolDetector symbolDetector,
         CardPrintingMapper mapper,
         IOptions<ScanScoringOptions> scoring,
         ILogger<ScanHandler> logger)
@@ -47,6 +49,7 @@ public sealed class ScanHandler
         this.crop = crop;
         this.zoneClassifier = zoneClassifier;
         this.zoneScorer = zoneScorer;
+        this.symbolDetector = symbolDetector;
         this.mapper = mapper;
         this.scoring = scoring.Value;
         this.logger = logger;
@@ -97,16 +100,20 @@ public sealed class ScanHandler
 
         var pHashTask = this.RunPHashAsync(preprocessed.Bytes);
         var ocrTask = this.RunOcrRegionsAsync(preprocessed.Bytes, preprocessed.MediaType, ct);
+        var symbolTask = preprocessed.Cropped
+            ? this.symbolDetector.DetectAsync(preprocessed.Bytes, preprocessed.MediaType, ct)
+            : Task.FromResult<SetSymbolMatch?>(null);
 
-        await Task.WhenAll(pHashTask, ocrTask);
+        await Task.WhenAll(pHashTask, ocrTask, symbolTask);
         var (imageHash, pHashLatencyMs, pHashHits) = pHashTask.Result;
         var (regions, ocrLatencyMs) = ocrTask.Result;
+        var symbolMatch = symbolTask.Result;
 
         var zones = preprocessed.Width > 0 && preprocessed.Height > 0
             ? this.zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
             : CardZones.Empty;
 
-        var scoringResult = await this.zoneScorer.ScoreAsync(zones, ct);
+        var scoringResult = await this.zoneScorer.ScoreAsync(zones, symbolMatch, ct);
 
         var byPrinting = new Dictionary<string, FinalRow>(StringComparer.Ordinal);
         foreach (var (id, scores) in scoringResult.ByPrinting)
@@ -155,6 +162,12 @@ public sealed class ScanHandler
                     RulesText = zones.RulesText,
                     PowerToughness = zones.PowerToughness,
                     BottomMetadata = zones.BottomMetadata,
+                },
+                SetSymbol = symbolMatch is null ? null : new ScanSetSymbol
+                {
+                    SetCode = symbolMatch.SetCode,
+                    HammingDistance = symbolMatch.HammingDistance,
+                    Score = symbolMatch.Score,
                 },
                 ImagePHash = imageHash,
                 Cropped = preprocessed.Cropped,

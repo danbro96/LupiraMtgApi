@@ -4,6 +4,8 @@ public sealed class ScanDebug
 {
     public required ScanZoneTexts Zones { get; set; }
 
+    public ScanSetSymbol? SetSymbol { get; set; }
+
     public long? ImagePHash { get; set; }
 
     public required bool Cropped { get; set; }
@@ -36,4 +38,13 @@ public sealed class ScanZoneTexts
     public required string PowerToughness { get; set; }
 
     public required string BottomMetadata { get; set; }
+}
+
+public sealed class ScanSetSymbol
+{
+    public required string SetCode { get; set; }
+
+    public required int HammingDistance { get; set; }
+
+    public required double Score { get; set; }
 }

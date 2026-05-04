@@ -63,6 +63,9 @@ builder.Services.AddSingleton<PHashService>();
 builder.Services.AddSingleton<PHashIndex>();
 builder.Services.AddSingleton<CardCropService>();
 builder.Services.AddSingleton<CardZoneClassifier>();
+builder.Services.AddSingleton<SetSymbolRasterizer>();
+builder.Services.AddSingleton<SetSymbolIndex>();
+builder.Services.AddSingleton<SetSymbolDetector>();
 
 builder.Services.AddHttpClient<ICardCatalogSource, ScryfallCatalogSource>(client =>
 {
@@ -89,6 +92,7 @@ builder.Services.AddHttpClient<IOcrService, FlorenceOcrService>((sp, client) =>
 builder.Services.AddSingleton<ScryfallSyncRunner>();
 builder.Services.AddHostedService<ScryfallSyncJob>();
 builder.Services.AddHostedService<PHashIndexBootstrapper>();
+builder.Services.AddHostedService<SetSymbolIndexBootstrapper>();
 
 builder.Services.AddScoped<CardPrintingMapper>();
 builder.Services.AddScoped<CardInstanceHydrator>();

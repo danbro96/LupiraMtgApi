@@ -35,7 +35,10 @@ public sealed class CardZoneScorer
         this.options = options.Value;
     }
 
-    public async Task<CardZoneScoringResult> ScoreAsync(CardZones zones, CancellationToken ct)
+    public async Task<CardZoneScoringResult> ScoreAsync(
+        CardZones zones,
+        SetSymbolMatch? symbolMatch,
+        CancellationToken ct)
     {
         var byPrinting = new Dictionary<string, PrintingZoneScores>(StringComparer.Ordinal);
 
@@ -43,7 +46,7 @@ public sealed class CardZoneScorer
         await ScoreTypeLineAsync(zones.TypeLine, byPrinting, ct);
         await ScoreRulesTextAsync(zones.RulesText, byPrinting, ct);
         await ScorePowerToughnessAsync(zones.PowerToughness, byPrinting, ct);
-        await ScoreBottomMetadataAsync(zones.BottomMetadata, byPrinting, ct);
+        await ScoreBottomMetadataAsync(zones.BottomMetadata, symbolMatch, byPrinting, ct);
 
         var weights = WeightsForPresentZones(zones);
         foreach (var scores in byPrinting.Values)
@@ -174,7 +177,11 @@ public sealed class CardZoneScorer
         }
     }
 
-    private async Task ScoreBottomMetadataAsync(string text, Dictionary<string, PrintingZoneScores> byPrinting, CancellationToken ct)
+    private async Task ScoreBottomMetadataAsync(
+        string text,
+        SetSymbolMatch? symbolMatch,
+        Dictionary<string, PrintingZoneScores> byPrinting,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -198,6 +205,58 @@ public sealed class CardZoneScorer
         var setLangMatch = SetLangRegex.Match(text);
         var setCode = setLangMatch.Success ? setLangMatch.Groups["set"].Value.ToLowerInvariant() : null;
         var lang = setLangMatch.Success ? setLangMatch.Groups["lang"].Value.ToLowerInvariant() : null;
+
+        // Tier 0: symbol-derived set agrees with text-derived set → metadata is authoritative.
+        if (symbolMatch is not null && setCode is not null
+            && string.Equals(symbolMatch.SetCode, setCode, StringComparison.OrdinalIgnoreCase))
+        {
+            var tier0 = await this.db.CardPrintings
+                .AsNoTracking()
+                .Where(p => p.SetCode == symbolMatch.SetCode && p.CollectorNumber == collectorNumber)
+                .Where(p => lang == null || p.Lang == lang)
+                .Select(p => p.Id)
+                .ToListAsync(ct);
+
+            foreach (var id in tier0)
+            {
+                GetOrAdd(byPrinting, id).BottomMetadataScore = 1.0;
+            }
+
+            if (tier0.Count > 0)
+            {
+                return;
+            }
+        }
+
+        // Symbol disagrees with OCR set → drop the OCR set so Tier 1 doesn't lock to a
+        // mis-OCR'd 3-letter blob. Falls through to Tier 2 (collector + rarity).
+        if (symbolMatch is not null && setCode is not null
+            && !string.Equals(symbolMatch.SetCode, setCode, StringComparison.OrdinalIgnoreCase))
+        {
+            setCode = null;
+        }
+
+        // Symbol matched but OCR didn't read a set code → use the symbol's set as a Tier-1
+        // driver. One signal missing vs. Tier 0 → slight discount.
+        if (symbolMatch is not null && setCode is null)
+        {
+            var tier1Symbol = await this.db.CardPrintings
+                .AsNoTracking()
+                .Where(p => p.SetCode == symbolMatch.SetCode && p.CollectorNumber == collectorNumber)
+                .Where(p => lang == null || p.Lang == lang)
+                .Select(p => p.Id)
+                .ToListAsync(ct);
+
+            foreach (var id in tier1Symbol)
+            {
+                GetOrAdd(byPrinting, id).BottomMetadataScore = 0.9;
+            }
+
+            if (tier1Symbol.Count > 0)
+            {
+                return;
+            }
+        }
 
         // Tier 1: full match on (SetCode, CollectorNumber, Lang). Authoritative.
         if (setCode is not null)
