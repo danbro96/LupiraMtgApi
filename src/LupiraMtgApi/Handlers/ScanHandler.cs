@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using LupiraMtgApi.Data;
-using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Models;
 using LupiraMtgApi.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using SixLabors.ImageSharp;
 
 namespace LupiraMtgApi.Handlers;
 
@@ -13,24 +14,18 @@ public sealed class ScanHandler
 {
     private const int MaxImageBytes = 4 * 1024 * 1024;
     private const int PHashTopK = 10;
-    private const int OcrTopK = 10;
     private const int FinalTopN = 5;
-
-    // Confidence thresholds — config-bind once we have production data; for now these
-    // mirror the values quoted in the architecture plan.
-    private const double HighCombined = 0.85;
-    private const double HighName = 0.75;
-    private const double MediumCombined = 0.60;
-    private const double MediumName = 0.50;
-    private const double NameCutoff = 0.30;
-
     private const int PHashMaxHamming = 12;
 
     private readonly LupiraMtgDbContext db;
     private readonly PHashIndex pHashIndex;
     private readonly PHashService pHash;
     private readonly IOcrService ocr;
+    private readonly CardCropService crop;
+    private readonly CardZoneClassifier zoneClassifier;
+    private readonly CardZoneScorer zoneScorer;
     private readonly CardPrintingMapper mapper;
+    private readonly ScanScoringOptions scoring;
     private readonly ILogger<ScanHandler> logger;
 
     public ScanHandler(
@@ -38,14 +33,22 @@ public sealed class ScanHandler
         PHashIndex pHashIndex,
         PHashService pHash,
         IOcrService ocr,
+        CardCropService crop,
+        CardZoneClassifier zoneClassifier,
+        CardZoneScorer zoneScorer,
         CardPrintingMapper mapper,
+        IOptions<ScanScoringOptions> scoring,
         ILogger<ScanHandler> logger)
     {
         this.db = db;
         this.pHashIndex = pHashIndex;
         this.pHash = pHash;
         this.ocr = ocr;
+        this.crop = crop;
+        this.zoneClassifier = zoneClassifier;
+        this.zoneScorer = zoneScorer;
         this.mapper = mapper;
+        this.scoring = scoring.Value;
         this.logger = logger;
     }
 
@@ -70,37 +73,156 @@ public sealed class ScanHandler
             imageBytes = ms.ToArray();
         }
 
-        var mediaType = string.IsNullOrEmpty(image.ContentType) ? "image/jpeg" : image.ContentType;
+        var inputMediaType = string.IsNullOrEmpty(image.ContentType) ? "image/jpeg" : image.ContentType;
 
-        var pHashTask = this.RunPHashAsync(imageBytes);
-        var ocrTask = this.RunOcrAsync(imageBytes, mediaType, ct);
+        CardCropResult preprocessed;
+        try
+        {
+            preprocessed = await this.crop.PreprocessAsync(imageBytes, inputMediaType, ct);
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogWarning(ex, "Card crop preprocessing failed; continuing with original image");
+            var (fallbackW, fallbackH) = ProbeImageSize(imageBytes);
+            preprocessed = new CardCropResult
+            {
+                Bytes = imageBytes,
+                MediaType = inputMediaType,
+                Cropped = false,
+                CropConfidence = 0.0,
+                Width = fallbackW,
+                Height = fallbackH,
+            };
+        }
+
+        var pHashTask = this.RunPHashAsync(preprocessed.Bytes);
+        var ocrTask = this.RunOcrRegionsAsync(preprocessed.Bytes, preprocessed.MediaType, ct);
 
         await Task.WhenAll(pHashTask, ocrTask);
         var (imageHash, pHashLatencyMs, pHashHits) = pHashTask.Result;
-        var (ocrText, ocrLatencyMs) = ocrTask.Result;
+        var (regions, ocrLatencyMs) = ocrTask.Result;
 
-        var ocrCandidates = await this.LookupByOcrAsync(ocrText, ct);
+        var zones = preprocessed.Width > 0 && preprocessed.Height > 0
+            ? this.zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
+            : CardZones.Empty;
 
-        var combined = await this.CombineAndRankAsync(pHashHits, ocrCandidates, ct);
+        var scoringResult = await this.zoneScorer.ScoreAsync(zones, ct);
 
-        var confidence = ClassifyConfidence(combined);
+        var byPrinting = new Dictionary<string, FinalRow>(StringComparer.Ordinal);
+        foreach (var (id, scores) in scoringResult.ByPrinting)
+        {
+            byPrinting[id] = new FinalRow { PrintingId = id, ZoneScores = scores };
+        }
 
-        var top = combined.Take(FinalTopN).ToList();
+        foreach (var hit in pHashHits)
+        {
+            if (!byPrinting.TryGetValue(hit.PrintingId, out var row))
+            {
+                row = new FinalRow { PrintingId = hit.PrintingId };
+                byPrinting[hit.PrintingId] = row;
+            }
+
+            row.HammingDistance = hit.Distance;
+            row.HammingScore = Math.Clamp(1.0 - (hit.Distance / 64.0), 0.0, 1.0);
+        }
+
+        var ocrSignalAvailable = scoringResult.Weights.TotalPresent > 0;
+        foreach (var row in byPrinting.Values)
+        {
+            var ocrScore = row.ZoneScores?.AggregateScore ?? 0.0;
+            var (wp, wo) = SelectFusionWeights(row.HammingDistance.HasValue, ocrSignalAvailable);
+            row.FinalScore = Math.Clamp((wp * row.HammingScore) + (wo * ocrScore), 0.0, 1.0);
+        }
+
+        var top = byPrinting.Values
+            .OrderByDescending(r => r.FinalScore)
+            .Take(FinalTopN)
+            .ToList();
+
+        var (ranked, hydratedRows) = await this.HydrateCandidatesAsync(top, ct);
+        var confidence = this.ClassifyConfidence(ranked, hydratedRows);
 
         return TypedResults.Ok(new ScanResponse
         {
             Confidence = confidence,
-            Candidates = top,
+            Candidates = ranked,
             Debug = new ScanDebug
             {
-                OcrText = string.IsNullOrWhiteSpace(ocrText) ? null : ocrText,
+                Zones = new ScanZoneTexts
+                {
+                    Name = zones.Name,
+                    TypeLine = zones.TypeLine,
+                    RulesText = zones.RulesText,
+                    PowerToughness = zones.PowerToughness,
+                    BottomMetadata = zones.BottomMetadata,
+                },
                 ImagePHash = imageHash,
+                Cropped = preprocessed.Cropped,
+                CropConfidence = preprocessed.CropConfidence,
+                CroppedWidth = preprocessed.Width,
+                CroppedHeight = preprocessed.Height,
+                OcrRegionCount = regions.Regions.Count,
                 PHashCandidateCount = pHashHits.Count,
-                OcrCandidateCount = ocrCandidates.Count,
+                OcrCandidateCount = scoringResult.ByPrinting.Count,
                 OcrLatencyMs = ocrLatencyMs,
                 PHashLatencyMs = pHashLatencyMs,
             },
         });
+    }
+
+    private async Task<(List<CardCandidateResponse> Ranked, List<FinalRow> HydratedRows)> HydrateCandidatesAsync(
+        List<FinalRow> top,
+        CancellationToken ct)
+    {
+        if (top.Count == 0)
+        {
+            return (new List<CardCandidateResponse>(), new List<FinalRow>());
+        }
+
+        var topIds = top.Select(r => r.PrintingId).ToList();
+        var printings = await this.db.CardPrintings
+            .AsNoTracking()
+            .Where(p => topIds.Contains(p.Id))
+            .ToListAsync(ct);
+        var printingsById = printings.ToDictionary(p => p.Id, StringComparer.Ordinal);
+
+        var setCodes = printings.Select(p => p.SetCode).Distinct().ToList();
+        var setNames = await this.db.Sets
+            .AsNoTracking()
+            .Where(s => setCodes.Contains(s.Code))
+            .ToDictionaryAsync(s => s.Code, s => s.Name, ct);
+
+        var ranked = new List<CardCandidateResponse>(top.Count);
+        var hydratedRows = new List<FinalRow>(top.Count);
+        foreach (var row in top)
+        {
+            if (!printingsById.TryGetValue(row.PrintingId, out var printing))
+            {
+                continue;
+            }
+
+            var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
+            var printingResponse = await this.mapper.MapAsync(printing, setName, ct);
+
+            ranked.Add(new CardCandidateResponse
+            {
+                Printing = printingResponse,
+                CombinedScore = row.FinalScore,
+                OcrAggregateScore = row.ZoneScores?.AggregateScore ?? 0.0,
+                NameScore = row.ZoneScores?.NameScore ?? 0.0,
+                TypeLineScore = row.ZoneScores?.TypeLineScore ?? 0.0,
+                RulesTextScore = row.ZoneScores?.RulesTextScore ?? 0.0,
+                PowerToughnessScore = row.ZoneScores?.PowerToughnessScore ?? 0.0,
+                BottomMetadataScore = row.ZoneScores?.BottomMetadataScore ?? 0.0,
+                HammingScore = row.HammingScore,
+                HammingDistance = row.HammingDistance,
+                MatchedByPHash = row.HammingDistance.HasValue,
+                MatchedByName = (row.ZoneScores?.NameScore ?? 0.0) > 0,
+            });
+            hydratedRows.Add(row);
+        }
+
+        return (ranked, hydratedRows);
     }
 
     private Task<(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)> RunPHashAsync(byte[] imageBytes)
@@ -132,140 +254,52 @@ public sealed class ScanHandler
         });
     }
 
-    private async Task<(string Text, int LatencyMs)> RunOcrAsync(byte[] imageBytes, string mediaType, CancellationToken ct)
+    private async Task<(OcrRegions Regions, int LatencyMs)> RunOcrRegionsAsync(byte[] imageBytes, string mediaType, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         try
         {
-            var text = await this.ocr.ReadTextAsync(imageBytes, mediaType, ct);
+            var regions = await this.ocr.ReadRegionsAsync(imageBytes, mediaType, ct);
             sw.Stop();
-            return (text, (int)sw.ElapsedMilliseconds);
+            return (regions, (int)sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
             sw.Stop();
-            this.logger.LogWarning(ex, "OCR call failed; falling back to pHash-only candidates");
-            return (string.Empty, (int)sw.ElapsedMilliseconds);
+            this.logger.LogWarning(ex, "OCR regions call failed; falling back to pHash-only candidates");
+            return (OcrRegions.Empty, (int)sw.ElapsedMilliseconds);
         }
     }
 
-    private async Task<List<(CardPrinting Printing, double NameScore)>> LookupByOcrAsync(
-        string ocrText,
-        CancellationToken ct)
+    // When only one of pHash/OCR contributes, scale that signal's weight to 1.0.
+    // Without this, a perfect single-signal match could not exceed PHashWeight or OcrWeight
+    // (typically 0.45/0.55 → < MediumCombined). Mirrors the per-zone re-normalization
+    // inside CardZoneScorer.
+    private (double PHashWeight, double OcrWeight) SelectFusionWeights(bool hasPhash, bool hasOcr)
     {
-        if (string.IsNullOrWhiteSpace(ocrText))
+        return (hasPhash, hasOcr) switch
         {
-            return new List<(CardPrinting, double)>();
-        }
-
-        var trimmed = ocrText.Trim();
-
-        var rows = await this.db.CardPrintings
-            .AsNoTracking()
-            .Select(p => new
-            {
-                Printing = p,
-                Score = EF.Functions.TrigramsWordSimilarity(p.Name, trimmed),
-            })
-            .Where(x => x.Score > NameCutoff)
-            .OrderByDescending(x => x.Score)
-            .Take(OcrTopK)
-            .ToListAsync(ct);
-
-        return rows.Select(r => (r.Printing, (double)r.Score)).ToList();
+            (true, true) => (this.scoring.PHashWeight, this.scoring.OcrWeight),
+            (true, false) => (1.0, 0.0),
+            (false, true) => (0.0, 1.0),
+            _ => (0.0, 0.0),
+        };
     }
 
-    private async Task<List<CardCandidateResponse>> CombineAndRankAsync(
-        IReadOnlyList<PHashIndex.PHashHit> pHashHits,
-        List<(CardPrinting Printing, double NameScore)> ocrCandidates,
-        CancellationToken ct)
+    private static (int Width, int Height) ProbeImageSize(byte[] imageBytes)
     {
-        var byId = new Dictionary<string, CombinedRow>();
-
-        foreach (var hit in pHashHits)
+        try
         {
-            var hammingScore = Math.Clamp(1.0 - (hit.Distance / 64.0), 0.0, 1.0);
-            byId[hit.PrintingId] = new CombinedRow
-            {
-                PrintingId = hit.PrintingId,
-                HammingDistance = hit.Distance,
-                HammingScore = hammingScore,
-                MatchedByPHash = true,
-            };
+            var info = Image.Identify(imageBytes);
+            return (info.Width, info.Height);
         }
-
-        foreach (var (printing, nameScore) in ocrCandidates)
+        catch
         {
-            if (!byId.TryGetValue(printing.Id, out var row))
-            {
-                row = new CombinedRow { PrintingId = printing.Id };
-                byId[printing.Id] = row;
-            }
-
-            row.NameScore = nameScore;
-            row.MatchedByName = true;
-            row.PrintingEntity = printing;
+            return (0, 0);
         }
-
-        // Hydrate any pHash-only printings (no OCR row to bring the entity along).
-        var missing = byId.Values
-            .Where(r => r.PrintingEntity is null)
-            .Select(r => r.PrintingId)
-            .ToList();
-        if (missing.Count > 0)
-        {
-            var rows = await this.db.CardPrintings
-                .AsNoTracking()
-                .Where(p => missing.Contains(p.Id))
-                .ToListAsync(ct);
-            foreach (var p in rows)
-            {
-                if (byId.TryGetValue(p.Id, out var row))
-                {
-                    row.PrintingEntity = p;
-                }
-            }
-        }
-
-        var setCodes = byId.Values
-            .Where(r => r.PrintingEntity is not null)
-            .Select(r => r.PrintingEntity!.SetCode)
-            .Distinct()
-            .ToList();
-        var setNames = await this.db.Sets
-            .AsNoTracking()
-            .Where(s => setCodes.Contains(s.Code))
-            .ToDictionaryAsync(s => s.Code, s => s.Name, ct);
-
-        var ranked = new List<CardCandidateResponse>(byId.Count);
-        foreach (var row in byId.Values)
-        {
-            if (row.PrintingEntity is null)
-            {
-                continue;
-            }
-
-            var combined = (0.5 * row.HammingScore) + (0.5 * row.NameScore);
-            var setName = setNames.GetValueOrDefault(row.PrintingEntity.SetCode, row.PrintingEntity.SetCode);
-            var printingResponse = await this.mapper.MapAsync(row.PrintingEntity, setName, ct);
-
-            ranked.Add(new CardCandidateResponse
-            {
-                Printing = printingResponse,
-                CombinedScore = Math.Clamp(combined, 0.0, 1.0),
-                NameScore = Math.Clamp(row.NameScore, 0.0, 1.0),
-                HammingScore = Math.Clamp(row.HammingScore, 0.0, 1.0),
-                HammingDistance = row.HammingDistance,
-                MatchedByPHash = row.MatchedByPHash,
-                MatchedByName = row.MatchedByName,
-            });
-        }
-
-        ranked.Sort((a, b) => b.CombinedScore.CompareTo(a.CombinedScore));
-        return ranked;
     }
 
-    private static RecognitionConfidence ClassifyConfidence(IReadOnlyList<CardCandidateResponse> ranked)
+    private RecognitionConfidence ClassifyConfidence(IReadOnlyList<CardCandidateResponse> ranked, IReadOnlyList<FinalRow> rows)
     {
         if (ranked.Count == 0)
         {
@@ -274,12 +308,16 @@ public sealed class ScanHandler
 
         var best = ranked[0];
 
-        if (best.NameScore >= HighName && best.CombinedScore >= HighCombined)
+        if (best.CombinedScore >= this.scoring.HighCombined && rows.Count > 0)
         {
-            return RecognitionConfidence.High;
+            var contributing = rows[0].ZoneScores?.ContributingZoneCount(this.scoring.HighZoneAgreementMinScore) ?? 0;
+            if (contributing >= this.scoring.HighZoneAgreementMinCount)
+            {
+                return RecognitionConfidence.High;
+            }
         }
 
-        if (best.NameScore >= MediumName && best.CombinedScore >= MediumCombined)
+        if (best.CombinedScore >= this.scoring.MediumCombined)
         {
             return RecognitionConfidence.Medium;
         }
@@ -287,20 +325,16 @@ public sealed class ScanHandler
         return RecognitionConfidence.Low;
     }
 
-    private sealed class CombinedRow
+    private sealed class FinalRow
     {
         public required string PrintingId { get; set; }
 
-        public CardPrinting? PrintingEntity { get; set; }
-
-        public double NameScore { get; set; }
+        public PrintingZoneScores? ZoneScores { get; set; }
 
         public double HammingScore { get; set; }
 
         public int? HammingDistance { get; set; }
 
-        public bool MatchedByPHash { get; set; }
-
-        public bool MatchedByName { get; set; }
+        public double FinalScore { get; set; }
     }
 }

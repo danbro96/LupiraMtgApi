@@ -57,6 +57,57 @@ public sealed class ScryfallCardDto
 
     [JsonPropertyName("layout")]
     public string Layout { get; set; } = string.Empty;
+
+    [JsonPropertyName("lang")]
+    public string? Lang { get; set; }
+
+    [JsonPropertyName("type_line")]
+    public string? TypeLine { get; set; }
+
+    [JsonPropertyName("printed_type_line")]
+    public string? PrintedTypeLine { get; set; }
+
+    [JsonPropertyName("oracle_text")]
+    public string? OracleText { get; set; }
+
+    [JsonPropertyName("printed_text")]
+    public string? PrintedText { get; set; }
+
+    [JsonPropertyName("power")]
+    public string? Power { get; set; }
+
+    [JsonPropertyName("toughness")]
+    public string? Toughness { get; set; }
+
+    [JsonPropertyName("card_faces")]
+    public ScryfallCardFace[]? CardFaces { get; set; }
+
+    [JsonPropertyName("foil")]
+    public bool Foil { get; set; }
+}
+
+public sealed class ScryfallCardFace
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("type_line")]
+    public string? TypeLine { get; set; }
+
+    [JsonPropertyName("printed_type_line")]
+    public string? PrintedTypeLine { get; set; }
+
+    [JsonPropertyName("oracle_text")]
+    public string? OracleText { get; set; }
+
+    [JsonPropertyName("printed_text")]
+    public string? PrintedText { get; set; }
+
+    [JsonPropertyName("power")]
+    public string? Power { get; set; }
+
+    [JsonPropertyName("toughness")]
+    public string? Toughness { get; set; }
 }
 
 public sealed class ScryfallImageUris

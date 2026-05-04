@@ -56,10 +56,13 @@ builder.Services.AddDbContext<LupiraMtgDbContext>(opts =>
 builder.Services.Configure<MinioImageStoreOptions>(builder.Configuration.GetSection("Minio"));
 builder.Services.Configure<ScryfallSyncOptions>(builder.Configuration.GetSection("ScryfallSync"));
 builder.Services.Configure<FlorenceOcrOptions>(builder.Configuration.GetSection("Florence"));
+builder.Services.Configure<ScanScoringOptions>(builder.Configuration.GetSection("Scan:Scoring"));
 
 builder.Services.AddSingleton<IImageStore, MinioImageStore>();
 builder.Services.AddSingleton<PHashService>();
 builder.Services.AddSingleton<PHashIndex>();
+builder.Services.AddSingleton<CardCropService>();
+builder.Services.AddSingleton<CardZoneClassifier>();
 
 builder.Services.AddHttpClient<ICardCatalogSource, ScryfallCatalogSource>(client =>
 {
@@ -92,6 +95,7 @@ builder.Services.AddScoped<CardInstanceHydrator>();
 builder.Services.AddScoped<CardSearchHandler>();
 builder.Services.AddScoped<AdminSyncHandler>();
 builder.Services.AddScoped<MeHandler>();
+builder.Services.AddScoped<CardZoneScorer>();
 builder.Services.AddScoped<ScanHandler>();
 builder.Services.AddScoped<CollectionsHandler>();
 builder.Services.AddScoped<SelectionsHandler>();

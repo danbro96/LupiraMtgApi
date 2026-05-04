@@ -25,4 +25,31 @@ public sealed class CardPrinting
     public Dictionary<string, decimal>? Prices { get; set; }
 
     public DateTimeOffset SyncedAt { get; set; }
+
+    public string? Supertype { get; set; }
+
+    public string Type { get; set; } = string.Empty;
+
+    public string? Subtype { get; set; }
+
+    // Postgres GENERATED ALWAYS AS … STORED column (see DbContext). Always reflects the
+    // recomposed full type line; trigram index lives here so matching uses the whole.
+    public string? TypeLineFull { get; set; }
+
+    // Printed rules text on this specific printing (Scryfall printed_text, falls back to
+    // oracle_text when absent). What OCR sees on the card; used for matching.
+    public string? RulesText { get; set; }
+
+    // Canonical English oracle text. Kept for display; not used for matching.
+    public string? OracleText { get; set; }
+
+    public string? Power { get; set; }
+
+    public string? Toughness { get; set; }
+
+    public string Lang { get; set; } = "en";
+
+    public string Layout { get; set; } = string.Empty;
+
+    public bool IsFoil { get; set; }
 }

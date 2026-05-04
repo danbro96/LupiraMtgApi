@@ -35,7 +35,37 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(p => p.Rarity).HasMaxLength(16);
             e.Property(p => p.ColorIdentity).HasColumnType("text[]");
             e.Property(p => p.Prices).HasColumnType("jsonb");
+
+            e.Property(p => p.Supertype).HasMaxLength(64);
+            e.Property(p => p.Type).HasMaxLength(64).IsRequired();
+            e.Property(p => p.Subtype).HasMaxLength(128);
+            e.Property(p => p.RulesText).HasColumnType("text");
+            e.Property(p => p.OracleText).HasColumnType("text");
+            e.Property(p => p.Power).HasMaxLength(16);
+            e.Property(p => p.Toughness).HasMaxLength(16);
+            e.Property(p => p.Lang).HasMaxLength(8).IsRequired();
+            e.Property(p => p.Layout).HasMaxLength(32).IsRequired();
+            e.Property(p => p.IsFoil).IsRequired();
+
+            // Recomposed type line as a Postgres GENERATED ALWAYS AS … STORED column.
+            // Always equals: [Supertype ]Type[ — Subtype]. Drives the type-line trigram
+            // index so OCR matching uses the whole composed string.
+            e.Property(p => p.TypeLineFull)
+                .HasColumnType("text")
+                .HasComputedColumnSql(
+                    """
+                    NULLIF(TRIM(BOTH ' ' FROM
+                        COALESCE("Supertype" || ' ', '')
+                        || COALESCE("Type", '')
+                        || CASE WHEN "Subtype" IS NULL THEN '' ELSE ' — ' || "Subtype" END
+                    ), '')
+                    """,
+                    stored: true);
+
             e.HasIndex(p => p.Name).HasMethod("gin").HasOperators("gin_trgm_ops");
+            e.HasIndex(p => p.TypeLineFull).HasMethod("gin").HasOperators("gin_trgm_ops");
+            e.HasIndex(p => p.RulesText).HasMethod("gin").HasOperators("gin_trgm_ops");
+            e.HasIndex(p => new { p.SetCode, p.CollectorNumber, p.Lang });
             e.HasIndex(p => new { p.SetCode, p.CollectorNumber });
             e.HasIndex(p => p.OracleId);
         });

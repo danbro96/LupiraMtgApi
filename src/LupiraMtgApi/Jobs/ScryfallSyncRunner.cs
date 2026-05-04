@@ -162,6 +162,8 @@ public sealed class ScryfallSyncRunner
             entity.Prices = MapPrices(dto.Prices);
             entity.SyncedAt = now;
 
+            ApplyFaceFields(entity, dto);
+
             if (existing is null)
             {
                 db.CardPrintings.Add(entity);
@@ -240,6 +242,46 @@ public sealed class ScryfallSyncRunner
     private static string NormalKey(string printingId) => $"printings/{printingId}/normal.jpg";
 
     private static string ArtCropKey(string printingId) => $"printings/{printingId}/art_crop.jpg";
+
+    private static void ApplyFaceFields(CardPrinting entity, ScryfallCardDto dto)
+    {
+        var lang = string.IsNullOrWhiteSpace(dto.Lang) ? "en" : dto.Lang!;
+        var layout = string.IsNullOrWhiteSpace(dto.Layout) ? "normal" : dto.Layout;
+
+        // Multi-faced layouts (transform, modal_dfc, double_faced_token, art_series) carry
+        // per-face data on card_faces[]. Use face 0 (front face) for now. The top-level
+        // type_line on these is "Front // Back", which would mis-parse.
+        var multiFaceLayouts = layout is "transform" or "modal_dfc" or "double_faced_token" or "art_series" or "reversible_card";
+        var face = multiFaceLayouts && dto.CardFaces is { Length: > 0 } ? dto.CardFaces[0] : null;
+
+        var typeLine = face?.TypeLine ?? dto.TypeLine;
+        var printedTypeLine = face?.PrintedTypeLine ?? dto.PrintedTypeLine;
+        var oracleText = face?.OracleText ?? dto.OracleText;
+        var printedText = face?.PrintedText ?? dto.PrintedText;
+        var power = face?.Power ?? dto.Power;
+        var toughness = face?.Toughness ?? dto.Toughness;
+
+        // Prefer the printed type line for non-English printings; fall back to canonical.
+        var typeLineForParse = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(printedTypeLine)
+            ? printedTypeLine
+            : typeLine;
+
+        var (supertype, type, subtype) = TypeLineParser.Parse(typeLineForParse);
+        entity.Supertype = supertype;
+        entity.Type = type;
+        entity.Subtype = subtype;
+
+        // RulesText = what's printed on the card (may be localized).
+        entity.RulesText = !string.IsNullOrWhiteSpace(printedText) ? printedText : oracleText;
+        // OracleText = canonical English oracle, regardless of printing language.
+        entity.OracleText = oracleText;
+
+        entity.Power = power;
+        entity.Toughness = toughness;
+        entity.Lang = lang;
+        entity.Layout = layout;
+        entity.IsFoil = dto.Foil;
+    }
 
     private static Dictionary<string, decimal>? MapPrices(ScryfallPrices? prices)
     {
