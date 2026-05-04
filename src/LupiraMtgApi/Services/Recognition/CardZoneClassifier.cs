@@ -12,6 +12,22 @@ public sealed class CardZoneClassifier
     private const double PtYLo = 0.885, PtYHi = 0.925, PtXLo = 0.78, PtXHi = 0.96;
     private const double MetaYLo = 0.91, MetaYHi = 0.97, MetaXLo = 0.03, MetaXHi = 0.40;
 
+    // Expected centroid range of OCR regions on a well-cropped card. The topmost OCR
+    // region is the Name centroid (~y=0.07 of card); the bottom-most is BottomMetadata
+    // (~y=0.94). Same idea on X: leftmost is the bottom-meta strip (~x=0.05), rightmost
+    // is P/T or rules right edge (~x=0.95). When the cropper leaves padding around the
+    // card, we rescale OCR centroids back into this space so the zone bands above
+    // measure position relative to the card content, not the loose crop bbox.
+    private const double CardOcrYMin = 0.07;
+    private const double CardOcrYMax = 0.94;
+    private const double CardOcrXMin = 0.05;
+    private const double CardOcrXMax = 0.95;
+
+    // Below this OCR-bbox extent on either axis we don't trust the bbox enough to
+    // rescale — too few regions or too tight a cluster, and rescaling would amplify
+    // noise. Falls back to image-relative centroids on that axis.
+    private const double MinTightBboxSpan = 0.20;
+
     public CardZones Classify(OcrRegions regions, int imageWidth, int imageHeight, bool cropped)
     {
         if (regions.Regions.Count == 0 || imageWidth <= 0 || imageHeight <= 0)
@@ -19,15 +35,77 @@ public sealed class CardZoneClassifier
             return CardZones.Empty;
         }
 
-        var ranked = regions.Regions
+        var raw = regions.Regions
+            .Select(r => new
+            {
+                Region = r,
+                RawCx = Centroid(r.QuadBox, isX: true) / imageWidth,
+                RawCy = Centroid(r.QuadBox, isX: false) / imageHeight,
+                AreaNormalized = QuadArea(r.QuadBox) / (imageWidth * (double) imageHeight),
+            })
+            .ToList();
+
+        var (xMap, yMap) = ComputeContentMaps(raw.Select(r => (r.RawCx, r.RawCy)));
+
+        var ranked = raw
             .Select(r => new RankedRegion(
-                Region: r,
-                Cx: Centroid(r.QuadBox, isX: true) / imageWidth,
-                Cy: Centroid(r.QuadBox, isX: false) / imageHeight,
-                AreaNormalized: QuadArea(r.QuadBox) / (imageWidth * (double) imageHeight)))
+                Region: r.Region,
+                Cx: xMap(r.RawCx),
+                Cy: yMap(r.RawCy),
+                AreaNormalized: r.AreaNormalized))
             .ToList();
 
         return cropped ? ClassifyCropped(ranked) : ClassifyUncropped(ranked);
+    }
+
+    // Produces two coordinate-mapping functions that take an image-relative centroid
+    // and emit a card-relative centroid. When OCR regions span enough of the image to
+    // be trusted, we map [bboxMin, bboxMax] → [CardOcrMin, CardOcrMax] so the fixed
+    // zone bands measure position relative to the card content. When the bbox is too
+    // tight on an axis, we leave that axis as identity (image-relative).
+    private static (Func<double, double> XMap, Func<double, double> YMap) ComputeContentMaps(
+        IEnumerable<(double Cx, double Cy)> centroids)
+    {
+        double minX = double.PositiveInfinity, maxX = double.NegativeInfinity;
+        double minY = double.PositiveInfinity, maxY = double.NegativeInfinity;
+        foreach (var (cx, cy) in centroids)
+        {
+            if (cx < minX)
+            {
+                minX = cx;
+            }
+
+            if (cx > maxX)
+            {
+                maxX = cx;
+            }
+
+            if (cy < minY)
+            {
+                minY = cy;
+            }
+
+            if (cy > maxY)
+            {
+                maxY = cy;
+            }
+        }
+
+        var xMap = BuildAxisMap(minX, maxX, CardOcrXMin, CardOcrXMax);
+        var yMap = BuildAxisMap(minY, maxY, CardOcrYMin, CardOcrYMax);
+        return (xMap, yMap);
+    }
+
+    private static Func<double, double> BuildAxisMap(double bboxMin, double bboxMax, double cardMin, double cardMax)
+    {
+        var span = bboxMax - bboxMin;
+        if (span < MinTightBboxSpan)
+        {
+            return v => v;
+        }
+
+        var cardSpan = cardMax - cardMin;
+        return v => cardMin + ((v - bboxMin) / span * cardSpan);
     }
 
     private static CardZones ClassifyCropped(List<RankedRegion> ranked)
