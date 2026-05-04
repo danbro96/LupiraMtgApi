@@ -119,10 +119,21 @@ public sealed class CardZoneScorer
             return;
         }
 
+        // word_similarity (not similarity) — the OCR captures rules text + flavor text
+        // together, since the card prints them adjacently and Florence has no concept of
+        // "rules vs. flavor". Plain similarity() punishes the length mismatch (DB stores
+        // only rules); word_similarity finds the best subsequence of the OCR string that
+        // aligns with the DB rules and ignores the rest. Coalesce to OracleText so rows
+        // whose RulesText is null (older sync, or upstream missing printed_text) still
+        // get scored against canonical English oracle text.
         var rows = await _db.CardPrintings
             .AsNoTracking()
-            .Where(p => p.RulesText != null)
-            .Select(p => new { p.Id, Score = EF.Functions.TrigramsSimilarity(p.RulesText!, trimmed) })
+            .Where(p => p.RulesText != null || p.OracleText != null)
+            .Select(p => new
+            {
+                p.Id,
+                Score = EF.Functions.TrigramsWordSimilarity(p.RulesText ?? p.OracleText!, trimmed),
+            })
             .Where(x => x.Score > _options.RulesTextCutoff)
             .OrderByDescending(x => x.Score)
             .Take(_options.RulesTextTopK)
