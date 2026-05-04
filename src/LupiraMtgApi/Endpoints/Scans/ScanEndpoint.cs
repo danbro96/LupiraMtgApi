@@ -7,9 +7,10 @@ public static class ScanEndpoint
 {
     public static IEndpointConventionBuilder MapScan(this IEndpointRouteBuilder app) =>
         app.MapPost("/scans", (
+                HttpContext httpContext,
                 IFormFile image,
                 ScanHandler handler,
-                CancellationToken ct) => handler.ScanAsync(image, ct))
+                CancellationToken ct) => handler.ScanAsync(httpContext, image, ct))
             .DisableAntiforgery()
             .WithTags("Scans")
             .WithSummary("Recognize a Magic card from a photo.")

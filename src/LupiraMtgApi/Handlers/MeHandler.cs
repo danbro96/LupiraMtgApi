@@ -2,19 +2,18 @@ using LupiraMtgApi.Auth;
 using LupiraMtgApi.Data;
 using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
-
+using LupiraMtgApi.Models.Auth;
 namespace LupiraMtgApi.Handlers;
 
 public sealed class MeHandler
 {
-    private readonly LupiraMtgDbContext db;
+    private readonly LupiraMtgDbContext _db;
 
     public MeHandler(LupiraMtgDbContext db)
     {
-        this.db = db;
+        _db = db;
     }
 
     public async Task<Ok<RegisterDeviceResponse>> RegisterAsync(RegisterDeviceRequest? request, CancellationToken ct)
@@ -30,8 +29,8 @@ public sealed class MeHandler
             LastSeenAt = now,
         };
 
-        this.db.Devices.Add(device);
-        await this.db.SaveChangesAsync(ct);
+        _db.Devices.Add(device);
+        await _db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new RegisterDeviceResponse
         {
@@ -49,7 +48,7 @@ public sealed class MeHandler
             return TypedResults.Unauthorized();
         }
 
-        var device = await this.db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Sub == sub, ct);
+        var device = await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Sub == sub, ct);
         if (device is null)
         {
             return TypedResults.Unauthorized();

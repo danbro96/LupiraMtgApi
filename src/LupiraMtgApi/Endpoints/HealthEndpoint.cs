@@ -1,12 +1,12 @@
 using LupiraMtgApi.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
-
+using LupiraMtgApi.Models.Health;
 namespace LupiraMtgApi.Endpoints;
 
 public static class HealthEndpoint
 {
     public static IEndpointConventionBuilder MapHealthEndpoint(this IEndpointRouteBuilder app) =>
-        app.MapGet("/healthz", static Ok<HealthResponse>() => TypedResults.Ok(new HealthResponse { Status = "ok" }))
+        app.MapGet("/healthz", static Ok<HealthResponse> () => TypedResults.Ok(new HealthResponse { Status = "ok" }))
             .AllowAnonymous()
             .WithTags("Meta")
             .WithSummary("Liveness probe.")

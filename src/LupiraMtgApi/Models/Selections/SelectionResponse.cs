@@ -1,4 +1,4 @@
-using LupiraMtgApi.Models.Collections;
+using LupiraMtgApi.Models.Cards;
 
 namespace LupiraMtgApi.Models.Selections;
 

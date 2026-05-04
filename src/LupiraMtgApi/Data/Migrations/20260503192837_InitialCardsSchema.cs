@@ -1,5 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -34,7 +32,7 @@ namespace LupiraMtgApi.Data.Migrations
                     ImageArtCropKey = table.Column<string>(type: "text", nullable: true),
                     ArtPHash = table.Column<long>(type: "bigint", nullable: true),
                     Prices = table.Column<Dictionary<string, decimal>>(type: "jsonb", nullable: true),
-                    SyncedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    SyncedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                 },
                 constraints: table =>
                 {
@@ -52,7 +50,7 @@ namespace LupiraMtgApi.Data.Migrations
                     ReleasedAt = table.Column<DateOnly>(type: "date", nullable: true),
                     CardCount = table.Column<int>(type: "integer", nullable: false),
                     IconSvgUri = table.Column<string>(type: "text", nullable: true),
-                    SyncedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    SyncedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                 },
                 constraints: table =>
                 {

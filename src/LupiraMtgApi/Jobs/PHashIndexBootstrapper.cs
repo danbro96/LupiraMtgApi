@@ -1,16 +1,16 @@
 using LupiraMtgApi.Services;
-
+using LupiraMtgApi.Services.Imaging;
 namespace LupiraMtgApi.Jobs;
 
 public sealed class PHashIndexBootstrapper : IHostedService
 {
-    private readonly PHashIndex index;
-    private readonly ILogger<PHashIndexBootstrapper> logger;
+    private readonly PHashIndex _index;
+    private readonly ILogger<PHashIndexBootstrapper> _logger;
 
     public PHashIndexBootstrapper(PHashIndex index, ILogger<PHashIndexBootstrapper> logger)
     {
-        this.index = index;
-        this.logger = logger;
+        _index = index;
+        _logger = logger;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -22,7 +22,7 @@ public sealed class PHashIndexBootstrapper : IHostedService
         {
             try
             {
-                await this.index.RebuildAsync(cancellationToken);
+                await _index.RebuildAsync(cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -30,7 +30,7 @@ public sealed class PHashIndexBootstrapper : IHostedService
             }
             catch (Exception ex)
             {
-                this.logger.LogError(ex, "PHashIndex initial build failed; recognition will be OCR-only until the next sync");
+                _logger.LogError(ex, "PHashIndex initial build failed; recognition will be OCR-only until the next sync");
             }
         }, cancellationToken);
 

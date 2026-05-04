@@ -1,18 +1,19 @@
 using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Models;
 using LupiraMtgApi.Services;
-
+using LupiraMtgApi.Models.Cards;
+using LupiraMtgApi.Services.Storage;
 namespace LupiraMtgApi.Handlers;
 
 public sealed class CardPrintingMapper
 {
     private static readonly TimeSpan PresignExpiry = TimeSpan.FromMinutes(15);
 
-    private readonly IImageStore images;
+    private readonly IImageStore _images;
 
     public CardPrintingMapper(IImageStore images)
     {
-        this.images = images;
+        _images = images;
     }
 
     public async Task<CardPrintingResponse> MapAsync(CardPrinting printing, string setName, CancellationToken ct)
@@ -21,12 +22,12 @@ public sealed class CardPrintingMapper
 
         if (printing.ImageObjectKey is { Length: > 0 })
         {
-            imageUrls.Normal = await this.images.CreatePresignedGetUrlAsync(printing.ImageObjectKey, PresignExpiry, ct);
+            imageUrls.Normal = await _images.CreatePresignedGetUrlAsync(printing.ImageObjectKey, PresignExpiry, ct);
         }
 
         if (printing.ImageArtCropKey is { Length: > 0 })
         {
-            imageUrls.ArtCrop = await this.images.CreatePresignedGetUrlAsync(printing.ImageArtCropKey, PresignExpiry, ct);
+            imageUrls.ArtCrop = await _images.CreatePresignedGetUrlAsync(printing.ImageArtCropKey, PresignExpiry, ct);
         }
 
         return new CardPrintingResponse

@@ -22,7 +22,12 @@ using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
-
+using LupiraMtgApi.Services.Imaging;
+using LupiraMtgApi.Services.Ocr;
+using LupiraMtgApi.Services.Recognition;
+using LupiraMtgApi.Services.Scryfall;
+using LupiraMtgApi.Services.SetSymbol;
+using LupiraMtgApi.Services.Storage;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Postgres")

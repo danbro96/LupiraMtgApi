@@ -1,27 +1,31 @@
-using System.Globalization;
 using LupiraMtgApi.Data;
 using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Models;
 using LupiraMtgApi.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-
+using System.Globalization;
+using LupiraMtgApi.Models.Sync;
+using LupiraMtgApi.Services.Imaging;
+using LupiraMtgApi.Services.Scryfall;
+using LupiraMtgApi.Services.SetSymbol;
+using LupiraMtgApi.Services.Storage;
 namespace LupiraMtgApi.Jobs;
 
 public sealed class ScryfallSyncRunner
 {
-    private readonly IServiceScopeFactory scopeFactory;
-    private readonly ScryfallSyncOptions options;
-    private readonly ILogger<ScryfallSyncRunner> logger;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ScryfallSyncOptions _options;
+    private readonly ILogger<ScryfallSyncRunner> _logger;
 
     public ScryfallSyncRunner(
         IServiceScopeFactory scopeFactory,
         IOptions<ScryfallSyncOptions> options,
         ILogger<ScryfallSyncRunner> logger)
     {
-        this.scopeFactory = scopeFactory;
-        this.options = options.Value;
-        this.logger = logger;
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+        _logger = logger;
     }
 
     public async Task<SyncRunResponse> RunAsync(CancellationToken ct)
@@ -34,7 +38,7 @@ public sealed class ScryfallSyncRunner
 
         try
         {
-            await using var scope = this.scopeFactory.CreateAsyncScope();
+            await using var scope = _scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<LupiraMtgDbContext>();
             var source = scope.ServiceProvider.GetRequiredService<ICardCatalogSource>();
             var images = scope.ServiceProvider.GetRequiredService<IImageStore>();
@@ -52,7 +56,7 @@ public sealed class ScryfallSyncRunner
 
             report.Status = "completed";
             report.FinishedAt = DateTimeOffset.UtcNow;
-            this.logger.LogInformation(
+            _logger.LogInformation(
                 "Scryfall sync completed: {Total} total ({Added} added, {Updated} updated), {Images} images, {PHashes} pHashes in {Duration}",
                 report.PrintingsTotal,
                 report.PrintingsAdded,
@@ -67,7 +71,7 @@ public sealed class ScryfallSyncRunner
             }
             catch (Exception rebuildEx)
             {
-                this.logger.LogWarning(rebuildEx, "PHashIndex rebuild after sync failed; recognition will use the previous index until next sync");
+                _logger.LogWarning(rebuildEx, "PHashIndex rebuild after sync failed; recognition will use the previous index until next sync");
             }
 
             try
@@ -76,7 +80,7 @@ public sealed class ScryfallSyncRunner
             }
             catch (Exception rebuildEx)
             {
-                this.logger.LogWarning(rebuildEx, "SetSymbolIndex rebuild after sync failed; set-symbol detection will use the previous index until next sync");
+                _logger.LogWarning(rebuildEx, "SetSymbolIndex rebuild after sync failed; set-symbol detection will use the previous index until next sync");
             }
         }
         catch (Exception ex)
@@ -84,7 +88,7 @@ public sealed class ScryfallSyncRunner
             report.Status = "failed";
             report.FinishedAt = DateTimeOffset.UtcNow;
             report.Error = ex.Message;
-            this.logger.LogError(ex, "Scryfall sync failed");
+            _logger.LogError(ex, "Scryfall sync failed");
         }
 
         return report;
@@ -177,7 +181,7 @@ public sealed class ScryfallSyncRunner
             }
             catch (Exception ex)
             {
-                this.logger.LogWarning(
+                _logger.LogWarning(
                     ex,
                     "Set icon rasterize/upload failed for {SetCode}; will retry on next sync",
                     entity.Code);
@@ -185,7 +189,7 @@ public sealed class ScryfallSyncRunner
         }
 
         await db.SaveChangesAsync(ct);
-        this.logger.LogInformation(
+        _logger.LogInformation(
             "Set icons synced: {Succeeded}/{Pending}",
             succeeded,
             pending.Count);
@@ -203,7 +207,7 @@ public sealed class ScryfallSyncRunner
     {
         var entry = await source.GetDefaultCardsBulkEntryAsync(ct);
         var now = DateTimeOffset.UtcNow;
-        var batch = new List<CardPrinting>(this.options.BatchSize);
+        var batch = new List<CardPrinting>(_options.BatchSize);
 
         await foreach (var dto in source.StreamCardsAsync(entry.DownloadUri, ct))
         {
@@ -249,7 +253,7 @@ public sealed class ScryfallSyncRunner
                 report.PrintingsUpdated++;
             }
 
-            if (this.options.DownloadImages && entity.ImageObjectKey is null && dto.ImageUris?.Normal is { Length: > 0 })
+            if (_options.DownloadImages && entity.ImageObjectKey is null && dto.ImageUris?.Normal is { Length: > 0 })
             {
                 await UploadImageAsync(
                     images,
@@ -262,7 +266,7 @@ public sealed class ScryfallSyncRunner
                 report.ImagesUploaded++;
             }
 
-            if (this.options.DownloadImages && entity.ImageArtCropKey is null && dto.ImageUris?.ArtCrop is { Length: > 0 })
+            if (_options.DownloadImages && entity.ImageArtCropKey is null && dto.ImageUris?.ArtCrop is { Length: > 0 })
             {
                 await using var artStream = await source.DownloadImageAsync(dto.ImageUris.ArtCrop, ct);
                 using var ms = new MemoryStream();
@@ -272,7 +276,7 @@ public sealed class ScryfallSyncRunner
                 entity.ImageArtCropKey = ArtCropKey(dto.Id);
                 report.ImagesUploaded++;
 
-                if (this.options.ComputePHashes && entity.ArtPHash is null)
+                if (_options.ComputePHashes && entity.ArtPHash is null)
                 {
                     ms.Position = 0;
                     entity.ArtPHash = await pHash.ComputeAsync(ms, ct);
@@ -280,19 +284,19 @@ public sealed class ScryfallSyncRunner
                 }
             }
 
-            if (report.PrintingsTotal % this.options.BatchSize == 0)
+            if (report.PrintingsTotal % _options.BatchSize == 0)
             {
                 await db.SaveChangesAsync(ct);
-                this.logger.LogInformation(
+                _logger.LogInformation(
                     "Sync progress: {Total} processed ({Added} added, {Updated} updated)",
                     report.PrintingsTotal,
                     report.PrintingsAdded,
                     report.PrintingsUpdated);
             }
 
-            if (this.options.InterRequestDelayMs > 0)
+            if (_options.InterRequestDelayMs > 0)
             {
-                await Task.Delay(this.options.InterRequestDelayMs, ct);
+                await Task.Delay(_options.InterRequestDelayMs, ct);
             }
         }
 

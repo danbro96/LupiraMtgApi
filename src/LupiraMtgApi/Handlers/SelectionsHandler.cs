@@ -3,7 +3,6 @@ using LupiraMtgApi.Domain.Collection;
 using LupiraMtgApi.Domain.Selection;
 using LupiraMtgApi.Models.Selections;
 using Marten;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,18 +12,18 @@ public sealed class SelectionsHandler
 {
     private static readonly TimeSpan DefaultTtl = TimeSpan.FromDays(7);
 
-    private readonly IDocumentSession session;
-    private readonly LupiraMtgDbContext db;
-    private readonly CardInstanceHydrator hydrator;
+    private readonly IDocumentSession _session;
+    private readonly LupiraMtgDbContext _db;
+    private readonly CardInstanceHydrator _hydrator;
 
     public SelectionsHandler(
         IDocumentSession session,
         LupiraMtgDbContext db,
         CardInstanceHydrator hydrator)
     {
-        this.session = session;
-        this.db = db;
-        this.hydrator = hydrator;
+        _session = session;
+        _db = db;
+        _hydrator = hydrator;
     }
 
     public async Task<Results<Ok<SelectionResponse>, UnauthorizedHttpResult>> CreateAsync(
@@ -46,8 +45,8 @@ public sealed class SelectionsHandler
             ExpiresAt = now.Add(DefaultTtl),
         };
 
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
 
         return TypedResults.Ok(await this.MapAsync(doc, ct));
     }
@@ -89,7 +88,7 @@ public sealed class SelectionsHandler
         }
 
         var printing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-            this.db.CardPrintings.AsNoTracking(),
+            _db.CardPrintings.AsNoTracking(),
             p => p.Id == request.PrintingId,
             ct);
         if (printing is null)
@@ -123,10 +122,10 @@ public sealed class SelectionsHandler
         };
 
         doc.Cards.Add(entry);
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
 
-        var hydrated = await this.hydrator.HydrateSelectionAsync(new[] { entry }, ct);
+        var hydrated = await _hydrator.HydrateSelectionAsync(new[] { entry }, ct);
         return TypedResults.Ok(hydrated.Single());
     }
 
@@ -153,8 +152,8 @@ public sealed class SelectionsHandler
             return TypedResults.NotFound();
         }
 
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
 
@@ -175,7 +174,7 @@ public sealed class SelectionsHandler
             return TypedResults.NotFound();
         }
 
-        var collection = await this.session.LoadAsync<CollectionDocument>(request.CollectionId, ct);
+        var collection = await _session.LoadAsync<CollectionDocument>(request.CollectionId, ct);
         if (collection is null || collection.OwnerSub != sub || collection.Removed)
         {
             return TypedResults.NotFound();
@@ -209,9 +208,9 @@ public sealed class SelectionsHandler
         selection.Cards.RemoveAll(c => pickedIds.Contains(c.InstanceId));
         collection.UpdatedAt = now;
 
-        this.session.Store(collection);
-        this.session.Store(selection);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(collection);
+        _session.Store(selection);
+        await _session.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new CommitSelectionResponse
         {
@@ -224,7 +223,7 @@ public sealed class SelectionsHandler
 
     private async Task<SelectionDocument?> LoadOwnedAsync(Guid id, string ownerSub, CancellationToken ct)
     {
-        var doc = await this.session.LoadAsync<SelectionDocument>(id, ct);
+        var doc = await _session.LoadAsync<SelectionDocument>(id, ct);
         if (doc is null || doc.OwnerSub != ownerSub || doc.ExpiresAt < DateTimeOffset.UtcNow)
         {
             return null;
@@ -235,7 +234,7 @@ public sealed class SelectionsHandler
 
     private async Task<SelectionResponse> MapAsync(SelectionDocument doc, CancellationToken ct)
     {
-        var cards = await this.hydrator.HydrateSelectionAsync(doc.Cards, ct);
+        var cards = await _hydrator.HydrateSelectionAsync(doc.Cards, ct);
         return new SelectionResponse
         {
             Id = doc.Id,

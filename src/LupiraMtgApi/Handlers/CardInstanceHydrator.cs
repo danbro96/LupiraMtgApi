@@ -2,7 +2,6 @@ using LupiraMtgApi.Data;
 using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Domain.Collection;
 using LupiraMtgApi.Domain.Selection;
-using LupiraMtgApi.Models;
 using LupiraMtgApi.Models.Collections;
 using LupiraMtgApi.Models.Selections;
 using Microsoft.EntityFrameworkCore;
@@ -16,13 +15,13 @@ namespace LupiraMtgApi.Handlers;
 /// </summary>
 public sealed class CardInstanceHydrator
 {
-    private readonly LupiraMtgDbContext db;
-    private readonly CardPrintingMapper mapper;
+    private readonly LupiraMtgDbContext _db;
+    private readonly CardPrintingMapper _mapper;
 
     public CardInstanceHydrator(LupiraMtgDbContext db, CardPrintingMapper mapper)
     {
-        this.db = db;
-        this.mapper = mapper;
+        _db = db;
+        _mapper = mapper;
     }
 
     public async Task<List<CardInstanceResponse>> HydrateAsync(
@@ -48,7 +47,7 @@ public sealed class CardInstanceHydrator
             }
 
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-            var printingResponse = await this.mapper.MapAsync(printing, setName, ct);
+            var printingResponse = await _mapper.MapAsync(printing, setName, ct);
 
             result.Add(new CardInstanceResponse
             {
@@ -87,7 +86,7 @@ public sealed class CardInstanceHydrator
             }
 
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-            var printingResponse = await this.mapper.MapAsync(printing, setName, ct);
+            var printingResponse = await _mapper.MapAsync(printing, setName, ct);
 
             result.Add(new SelectionEntryResponse
             {
@@ -113,7 +112,7 @@ public sealed class CardInstanceHydrator
             return new Dictionary<string, CardPrinting>();
         }
 
-        var rows = await this.db.CardPrintings
+        var rows = await _db.CardPrintings
             .AsNoTracking()
             .Where(p => distinct.Contains(p.Id))
             .ToListAsync(ct);
@@ -131,7 +130,7 @@ public sealed class CardInstanceHydrator
             return new Dictionary<string, string>();
         }
 
-        return await this.db.Sets
+        return await _db.Sets
             .AsNoTracking()
             .Where(s => setCodes.Contains(s.Code))
             .ToDictionaryAsync(s => s.Code, s => s.Name, ct);

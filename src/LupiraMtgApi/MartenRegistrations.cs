@@ -1,4 +1,5 @@
 using LupiraMtgApi.Domain.Collection;
+using LupiraMtgApi.Domain.ScanLog;
 using LupiraMtgApi.Domain.Selection;
 using LupiraMtgApi.Domain.UserProfile;
 using Marten;
@@ -19,5 +20,10 @@ public static class MartenRegistrations
         opts.Schema.For<CollectionDocument>()
             .Identity(c => c.Id)
             .Index(x => x.OwnerSub);
+
+        opts.Schema.For<ScanLogDocument>()
+            .Identity(x => x.Id)
+            .Index(x => x.OwnerSub)
+            .Index(x => x.ScannedAt);
     }
 }

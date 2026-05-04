@@ -1,16 +1,16 @@
 using LupiraMtgApi.Services;
-
+using LupiraMtgApi.Services.SetSymbol;
 namespace LupiraMtgApi.Jobs;
 
 public sealed class SetSymbolIndexBootstrapper : IHostedService
 {
-    private readonly SetSymbolIndex index;
-    private readonly ILogger<SetSymbolIndexBootstrapper> logger;
+    private readonly SetSymbolIndex _index;
+    private readonly ILogger<SetSymbolIndexBootstrapper> _logger;
 
     public SetSymbolIndexBootstrapper(SetSymbolIndex index, ILogger<SetSymbolIndexBootstrapper> logger)
     {
-        this.index = index;
-        this.logger = logger;
+        _index = index;
+        _logger = logger;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -23,14 +23,14 @@ public sealed class SetSymbolIndexBootstrapper : IHostedService
             {
                 try
                 {
-                    await this.index.RebuildAsync(cancellationToken);
+                    await _index.RebuildAsync(cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
                 }
                 catch (Exception ex)
                 {
-                    this.logger.LogError(ex, "SetSymbolIndex initial build failed; set-symbol detection disabled until next sync");
+                    _logger.LogError(ex, "SetSymbolIndex initial build failed; set-symbol detection disabled until next sync");
                 }
             },
             cancellationToken);

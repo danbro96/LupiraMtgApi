@@ -1,20 +1,19 @@
 using LupiraMtgApi.Domain.Collection;
 using LupiraMtgApi.Models.Collections;
 using Marten;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LupiraMtgApi.Handlers;
 
 public sealed class MyCardsHandler
 {
-    private readonly IDocumentSession session;
-    private readonly CardInstanceHydrator hydrator;
+    private readonly IDocumentSession _session;
+    private readonly CardInstanceHydrator _hydrator;
 
     public MyCardsHandler(IDocumentSession session, CardInstanceHydrator hydrator)
     {
-        this.session = session;
-        this.hydrator = hydrator;
+        _session = session;
+        _hydrator = hydrator;
     }
 
     public async Task<Results<Ok<CardListResponse>, UnauthorizedHttpResult>> ListAsync(
@@ -27,7 +26,7 @@ public sealed class MyCardsHandler
         }
 
         var collections = await Marten.QueryableExtensions.ToListAsync(
-            this.session.Query<CollectionDocument>()
+            _session.Query<CollectionDocument>()
                 .Where(c => c.OwnerSub == sub && !c.Removed),
             ct);
 
@@ -41,7 +40,7 @@ public sealed class MyCardsHandler
             .SelectMany(c => c.Cards.Select(card => (Instance: card, Collection: c)))
             .ToDictionary(x => x.Instance.InstanceId, x => x.Collection);
 
-        var hydrated = await this.hydrator.HydrateAsync(allCards, collectionId: null, collectionName: null, ct);
+        var hydrated = await _hydrator.HydrateAsync(allCards, collectionId: null, collectionName: null, ct);
         foreach (var card in hydrated)
         {
             if (collectionByInstance.TryGetValue(card.InstanceId, out var owner))

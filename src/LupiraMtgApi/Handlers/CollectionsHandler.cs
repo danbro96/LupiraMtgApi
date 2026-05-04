@@ -2,7 +2,6 @@ using LupiraMtgApi.Data;
 using LupiraMtgApi.Domain.Collection;
 using LupiraMtgApi.Models.Collections;
 using Marten;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,18 +11,18 @@ public sealed class CollectionsHandler
 {
     private const int MaxNameLength = 64;
 
-    private readonly IDocumentSession session;
-    private readonly LupiraMtgDbContext db;
-    private readonly CardInstanceHydrator hydrator;
+    private readonly IDocumentSession _session;
+    private readonly LupiraMtgDbContext _db;
+    private readonly CardInstanceHydrator _hydrator;
 
     public CollectionsHandler(
         IDocumentSession session,
         LupiraMtgDbContext db,
         CardInstanceHydrator hydrator)
     {
-        this.session = session;
-        this.db = db;
-        this.hydrator = hydrator;
+        _session = session;
+        _db = db;
+        _hydrator = hydrator;
     }
 
     public async Task<Results<Ok<CollectionListResponse>, UnauthorizedHttpResult>> ListAsync(
@@ -36,7 +35,7 @@ public sealed class CollectionsHandler
         }
 
         var docs = await Marten.QueryableExtensions.ToListAsync(
-            this.session.Query<CollectionDocument>()
+            _session.Query<CollectionDocument>()
                 .Where(c => c.OwnerSub == sub && !c.Removed)
                 .OrderBy(c => c.Name),
             ct);
@@ -82,8 +81,8 @@ public sealed class CollectionsHandler
             UpdatedAt = now,
         };
 
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new CollectionResponse
         {
@@ -111,7 +110,7 @@ public sealed class CollectionsHandler
             return TypedResults.NotFound();
         }
 
-        var cards = await this.hydrator.HydrateAsync(doc.Cards, doc.Id, doc.Name, ct);
+        var cards = await _hydrator.HydrateAsync(doc.Cards, doc.Id, doc.Name, ct);
 
         return TypedResults.Ok(new CollectionDetailResponse
         {
@@ -148,8 +147,8 @@ public sealed class CollectionsHandler
 
         doc.Name = name;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
 
         return TypedResults.Ok(new CollectionResponse
         {
@@ -179,8 +178,8 @@ public sealed class CollectionsHandler
 
         doc.Removed = true;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
 
         return TypedResults.NoContent();
     }
@@ -201,7 +200,7 @@ public sealed class CollectionsHandler
             return TypedResults.NotFound();
         }
 
-        var cards = await this.hydrator.HydrateAsync(doc.Cards, doc.Id, doc.Name, ct);
+        var cards = await _hydrator.HydrateAsync(doc.Cards, doc.Id, doc.Name, ct);
         return TypedResults.Ok(new CardListResponse { Cards = cards });
     }
 
@@ -223,7 +222,7 @@ public sealed class CollectionsHandler
         }
 
         var printing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-            this.db.CardPrintings.AsNoTracking(),
+            _db.CardPrintings.AsNoTracking(),
             p => p.Id == request.PrintingId,
             ct);
         if (printing is null)
@@ -243,10 +242,10 @@ public sealed class CollectionsHandler
 
         doc.Cards.Add(instance);
         doc.UpdatedAt = DateTimeOffset.UtcNow;
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
 
-        var hydrated = await this.hydrator.HydrateAsync(new[] { instance }, doc.Id, doc.Name, ct);
+        var hydrated = await _hydrator.HydrateAsync(new[] { instance }, doc.Id, doc.Name, ct);
         return TypedResults.Ok(hydrated.Single());
     }
 
@@ -274,8 +273,8 @@ public sealed class CollectionsHandler
         }
 
         doc.UpdatedAt = DateTimeOffset.UtcNow;
-        this.session.Store(doc);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(doc);
+        await _session.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
 
@@ -320,17 +319,17 @@ public sealed class CollectionsHandler
         source.UpdatedAt = now;
         destination.UpdatedAt = now;
 
-        this.session.Store(source);
-        this.session.Store(destination);
-        await this.session.SaveChangesAsync(ct);
+        _session.Store(source);
+        _session.Store(destination);
+        await _session.SaveChangesAsync(ct);
 
-        var hydrated = await this.hydrator.HydrateAsync(new[] { card }, destination.Id, destination.Name, ct);
+        var hydrated = await _hydrator.HydrateAsync(new[] { card }, destination.Id, destination.Name, ct);
         return TypedResults.Ok(hydrated.Single());
     }
 
     private async Task<CollectionDocument?> LoadOwnedAsync(Guid id, string ownerSub, CancellationToken ct)
     {
-        var doc = await this.session.LoadAsync<CollectionDocument>(id, ct);
+        var doc = await _session.LoadAsync<CollectionDocument>(id, ct);
         if (doc is null || doc.OwnerSub != ownerSub || doc.Removed)
         {
             return null;

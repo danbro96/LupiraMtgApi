@@ -18,6 +18,8 @@ public sealed class LupiraMtgDbContext : DbContext
 
     public DbSet<DeviceUser> Devices => Set<DeviceUser>();
 
+    public DbSet<SetTypeWeight> SetTypeWeights => Set<SetTypeWeight>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
@@ -87,6 +89,15 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(d => d.TokenHash).HasMaxLength(64).IsRequired();
             e.Property(d => d.DisplayName).HasMaxLength(64);
             e.HasIndex(d => d.TokenHash).IsUnique();
+        });
+
+        modelBuilder.Entity<SetTypeWeight>(e =>
+        {
+            e.ToTable("set_type_weights");
+            e.HasKey(w => w.SetType);
+            e.Property(w => w.SetType).HasMaxLength(32);
+            e.Property(w => w.Weight).IsRequired();
+            e.Property(w => w.UpdatedAt).IsRequired();
         });
     }
 }

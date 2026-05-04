@@ -1,9 +1,9 @@
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using LupiraMtgApi.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace LupiraMtgApi.Auth;
 
@@ -11,7 +11,7 @@ public sealed class DeviceTokenAuthenticationHandler : AuthenticationHandler<Dev
 {
     private const string BearerPrefix = "Bearer ";
 
-    private readonly LupiraMtgDbContext db;
+    private readonly LupiraMtgDbContext _db;
 
     public DeviceTokenAuthenticationHandler(
         IOptionsMonitor<DeviceTokenAuthOptions> options,
@@ -20,7 +20,7 @@ public sealed class DeviceTokenAuthenticationHandler : AuthenticationHandler<Dev
         LupiraMtgDbContext db)
         : base(options, logger, encoder)
     {
-        this.db = db;
+        _db = db;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -43,7 +43,7 @@ public sealed class DeviceTokenAuthenticationHandler : AuthenticationHandler<Dev
         }
 
         var hash = DeviceTokens.HashToken(token);
-        var device = await this.db.Devices.FirstOrDefaultAsync(d => d.TokenHash == hash, this.Context.RequestAborted);
+        var device = await _db.Devices.FirstOrDefaultAsync(d => d.TokenHash == hash, this.Context.RequestAborted);
         if (device is null)
         {
             return AuthenticateResult.Fail("Unknown device token.");
@@ -56,7 +56,7 @@ public sealed class DeviceTokenAuthenticationHandler : AuthenticationHandler<Dev
             device.LastSeenAt = now;
             try
             {
-                await this.db.SaveChangesAsync(this.Context.RequestAborted);
+                await _db.SaveChangesAsync(this.Context.RequestAborted);
             }
             catch (DbUpdateConcurrencyException)
             {

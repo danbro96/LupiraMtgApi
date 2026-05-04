@@ -1,4 +1,3 @@
-﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -20,7 +19,7 @@ namespace LupiraMtgApi.Data.Migrations
                     TokenHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     DisplayName = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    LastSeenAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    LastSeenAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                 },
                 constraints: table =>
                 {

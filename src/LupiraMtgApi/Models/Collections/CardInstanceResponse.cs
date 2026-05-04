@@ -1,3 +1,5 @@
+using LupiraMtgApi.Models.Cards;
+
 namespace LupiraMtgApi.Models.Collections;
 
 public sealed class CardInstanceResponse

@@ -5,41 +5,41 @@ namespace LupiraMtgApi.Jobs;
 
 public sealed class ScryfallSyncJob : BackgroundService
 {
-    private readonly ScryfallSyncRunner runner;
-    private readonly ScryfallSyncOptions options;
-    private readonly ILogger<ScryfallSyncJob> logger;
-    private readonly CronExpression cron;
+    private readonly ScryfallSyncRunner _runner;
+    private readonly ScryfallSyncOptions _options;
+    private readonly ILogger<ScryfallSyncJob> _logger;
+    private readonly CronExpression _cron;
 
     public ScryfallSyncJob(
         ScryfallSyncRunner runner,
         IOptions<ScryfallSyncOptions> options,
         ILogger<ScryfallSyncJob> logger)
     {
-        this.runner = runner;
-        this.options = options.Value;
-        this.logger = logger;
-        this.cron = CronExpression.Parse(this.options.CronSchedule, CronFormat.Standard);
+        _runner = runner;
+        _options = options.Value;
+        _logger = logger;
+        _cron = CronExpression.Parse(_options.CronSchedule, CronFormat.Standard);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (this.options.RunOnStartup)
+        if (_options.RunOnStartup)
         {
-            this.logger.LogInformation("Running Scryfall sync on startup");
-            await this.runner.RunAsync(stoppingToken);
+            _logger.LogInformation("Running Scryfall sync on startup");
+            await _runner.RunAsync(stoppingToken);
         }
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var next = this.cron.GetNextOccurrence(DateTimeOffset.UtcNow, TimeZoneInfo.Utc);
+            var next = _cron.GetNextOccurrence(DateTimeOffset.UtcNow, TimeZoneInfo.Utc);
             if (next is null)
             {
-                this.logger.LogWarning("Cron schedule {Schedule} has no future occurrences; sync job exiting", this.options.CronSchedule);
+                _logger.LogWarning("Cron schedule {Schedule} has no future occurrences; sync job exiting", _options.CronSchedule);
                 return;
             }
 
             var delay = next.Value - DateTimeOffset.UtcNow;
-            this.logger.LogInformation("Next Scryfall sync at {NextRun} (in {Delay})", next.Value, delay);
+            _logger.LogInformation("Next Scryfall sync at {NextRun} (in {Delay})", next.Value, delay);
 
             try
             {
@@ -50,7 +50,7 @@ public sealed class ScryfallSyncJob : BackgroundService
                 return;
             }
 
-            await this.runner.RunAsync(stoppingToken);
+            await _runner.RunAsync(stoppingToken);
         }
     }
 }

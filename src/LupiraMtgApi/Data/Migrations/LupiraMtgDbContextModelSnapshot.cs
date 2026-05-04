@@ -216,6 +216,23 @@ namespace LupiraMtgApi.Data.Migrations
 
                     b.ToTable("sets", "cards");
                 });
+
+            modelBuilder.Entity("LupiraMtgApi.Data.Entities.SetTypeWeight", b =>
+                {
+                    b.Property<string>("SetType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Weight")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("SetType");
+
+                    b.ToTable("set_type_weights", "cards");
+                });
 #pragma warning restore 612, 618
         }
     }

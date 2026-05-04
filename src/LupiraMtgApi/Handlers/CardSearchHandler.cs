@@ -3,7 +3,7 @@ using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
-
+using LupiraMtgApi.Models.Cards;
 namespace LupiraMtgApi.Handlers;
 
 public sealed class CardSearchHandler
@@ -11,18 +11,18 @@ public sealed class CardSearchHandler
     private const int DefaultLimit = 25;
     private const int MaxLimit = 100;
 
-    private readonly LupiraMtgDbContext db;
-    private readonly CardPrintingMapper mapper;
+    private readonly LupiraMtgDbContext _db;
+    private readonly CardPrintingMapper _mapper;
 
     public CardSearchHandler(LupiraMtgDbContext db, CardPrintingMapper mapper)
     {
-        this.db = db;
-        this.mapper = mapper;
+        _db = db;
+        _mapper = mapper;
     }
 
     public async Task<Results<Ok<CardPrintingResponse>, NotFound>> GetByIdAsync(string printingId, CancellationToken ct)
     {
-        var printing = await this.db.CardPrintings
+        var printing = await _db.CardPrintings
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == printingId, ct);
 
@@ -31,13 +31,13 @@ public sealed class CardSearchHandler
             return TypedResults.NotFound();
         }
 
-        var setName = await this.db.Sets
+        var setName = await _db.Sets
             .AsNoTracking()
             .Where(s => s.Code == printing.SetCode)
             .Select(s => s.Name)
             .FirstOrDefaultAsync(ct) ?? printing.SetCode;
 
-        var response = await this.mapper.MapAsync(printing, setName, ct);
+        var response = await _mapper.MapAsync(printing, setName, ct);
         return TypedResults.Ok(response);
     }
 
@@ -51,7 +51,7 @@ public sealed class CardSearchHandler
     {
         var take = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
 
-        IQueryable<CardPrinting> query = this.db.CardPrintings.AsNoTracking();
+        IQueryable<CardPrinting> query = _db.CardPrintings.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(set))
         {
@@ -87,7 +87,7 @@ public sealed class CardSearchHandler
         var rows = await query.Take(take).ToListAsync(ct);
 
         var setCodes = rows.Select(r => r.SetCode).Distinct().ToList();
-        var setNames = await this.db.Sets
+        var setNames = await _db.Sets
             .AsNoTracking()
             .Where(s => setCodes.Contains(s.Code))
             .ToDictionaryAsync(s => s.Code, s => s.Name, ct);
@@ -96,7 +96,7 @@ public sealed class CardSearchHandler
         foreach (var row in rows)
         {
             var setName = setNames.GetValueOrDefault(row.SetCode, row.SetCode);
-            results.Add(await this.mapper.MapAsync(row, setName, ct));
+            results.Add(await _mapper.MapAsync(row, setName, ct));
         }
 
         return TypedResults.Ok(new CardSearchResponse { Results = results, Total = total });
