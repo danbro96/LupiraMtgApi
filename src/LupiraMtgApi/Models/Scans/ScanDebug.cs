@@ -12,6 +12,8 @@ public sealed class ScanDebug
 
     public required double CropConfidence { get; set; }
 
+    public required bool CropRotated { get; set; }
+
     public required int CroppedWidth { get; set; }
 
     public required int CroppedHeight { get; set; }

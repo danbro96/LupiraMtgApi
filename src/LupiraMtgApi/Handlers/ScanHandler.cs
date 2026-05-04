@@ -222,6 +222,7 @@ public sealed class ScanHandler
                 ImagePHash = imageHash,
                 Cropped = preprocessed.Cropped,
                 CropConfidence = preprocessed.CropConfidence,
+                CropRotated = preprocessed.Rotated,
                 CroppedWidth = preprocessed.Width,
                 CroppedHeight = preprocessed.Height,
                 OcrRegionCount = regions.Regions.Count,

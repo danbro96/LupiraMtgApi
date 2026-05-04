@@ -119,6 +119,24 @@ public sealed class CardCropService
         var origBoxH = oyBot - oyTop + 1;
 
         using var cropped = original.Clone(ctx => ctx.Crop(new Rectangle(oxLeft, oyTop, origBoxW, origBoxH)));
+
+        // MTG cards are portrait. If the bbox came out landscape (W > H), the card was
+        // photographed sideways and Florence will have read text upright but in a frame
+        // rotated 90° from the portrait reference our zone bands assume. Rotate back to
+        // portrait so the downstream classifier's y-bands line up with the card.
+        // Direction defaults to clockwise; if telemetry shows it's wrong half the time
+        // we can re-orient using OCR centroid distribution as a second pass.
+        var rotated = false;
+        var outputW = origBoxW;
+        var outputH = origBoxH;
+        if (origBoxW > origBoxH)
+        {
+            cropped.Mutate(c => c.Rotate(RotateMode.Rotate90));
+            outputW = origBoxH;
+            outputH = origBoxW;
+            rotated = true;
+        }
+
         var (encoder, outMediaType) = SelectEncoder(contentType);
         using var ms = new MemoryStream();
         await cropped.SaveAsync(ms, encoder, ct);
@@ -129,8 +147,9 @@ public sealed class CardCropService
             MediaType = outMediaType,
             Cropped = true,
             CropConfidence = confidence,
-            Width = origBoxW,
-            Height = origBoxH,
+            Width = outputW,
+            Height = outputH,
+            Rotated = rotated,
         };
     }
 
