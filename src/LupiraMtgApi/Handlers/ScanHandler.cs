@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using System.Diagnostics;
 using LupiraMtgApi.Models.Scans;
 using LupiraMtgApi.Services.Imaging;
@@ -22,6 +24,12 @@ public sealed class ScanHandler
     private const int PHashTopK = 10;
     private const int FinalTopN = 5;
     private const int PHashMaxHamming = 12;
+
+    // If the cropper rotated to portrait but the first pass populates fewer than this many
+    // zones, try the other 90° rotation (180° flip of the current bytes). 3 = need at
+    // least Name + Type + one more before we trust the first pass; basic lands and vanilla
+    // creatures naturally hit 3+ when correctly oriented.
+    private const int RotationRetryCoverageThreshold = 3;
 
     // Used when a printing's set has no matching set_type_weights row (defensive
     // against new Scryfall set_types we haven't seeded). Neutral midpoint so an
@@ -146,6 +154,63 @@ public sealed class ScanHandler
             ? _zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
             : CardZones.Empty;
 
+        // Two-pass OCR: when CardCropService had to rotate (landscape bbox → portrait),
+        // it picked clockwise by default. If the first pass produced sparse zones the card
+        // might be upside-down — flip 180° and retry. We pick whichever pass populated
+        // more zones. pHash and symbol detection ride along so all three signals reflect
+        // the same orientation.
+        var rotationRetried = false;
+        if (preprocessed.Rotated && ZoneCoverageScore(zones) < RotationRetryCoverageThreshold)
+        {
+            try
+            {
+                var altBytes = await Rotate180Async(preprocessed.Bytes, ct);
+                var altPHashTask = this.RunPHashAsync(altBytes);
+                var altOcrTask = this.RunOcrRegionsAsync(altBytes, preprocessed.MediaType, ct);
+                var altSymbolTask = preprocessed.Cropped
+                    ? _symbolDetector.DetectAsync(altBytes, preprocessed.MediaType, ct)
+                    : Task.FromResult<SetSymbolMatch?>(null);
+
+                await Task.WhenAll(altPHashTask, altOcrTask, altSymbolTask);
+                var (altImageHash, altPHashLatencyMs, altPHashHits) = altPHashTask.Result;
+                var (altRegions, altOcrLatencyMs) = altOcrTask.Result;
+                var altSymbolMatch = altSymbolTask.Result;
+
+                var altZones = preprocessed.Width > 0 && preprocessed.Height > 0
+                    ? _zoneClassifier.Classify(altRegions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
+                    : CardZones.Empty;
+
+                if (ZoneCoverageScore(altZones) > ZoneCoverageScore(zones))
+                {
+                    rotationRetried = true;
+                    zones = altZones;
+                    regions = altRegions;
+                    symbolMatch = altSymbolMatch;
+                    imageHash = altImageHash;
+                    pHashHits = altPHashHits;
+                    preprocessed = new CardCropResult
+                    {
+                        Bytes = altBytes,
+                        MediaType = preprocessed.MediaType,
+                        Cropped = preprocessed.Cropped,
+                        CropConfidence = preprocessed.CropConfidence,
+                        Width = preprocessed.Width,
+                        Height = preprocessed.Height,
+                        Rotated = preprocessed.Rotated,
+                    };
+                }
+
+                // Add both passes' latencies regardless of which pass won, so telemetry
+                // reflects the true time cost of the retry.
+                ocrLatencyMs += altOcrLatencyMs;
+                pHashLatencyMs += altPHashLatencyMs;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Rotation retry failed; keeping first-pass results");
+            }
+        }
+
         var scoringResult = await _zoneScorer.ScoreAsync(zones, symbolMatch, ct);
 
         var byPrinting = new Dictionary<string, FinalRow>(StringComparer.Ordinal);
@@ -223,6 +288,7 @@ public sealed class ScanHandler
                 Cropped = preprocessed.Cropped,
                 CropConfidence = preprocessed.CropConfidence,
                 CropRotated = preprocessed.Rotated,
+                RotationRetried = rotationRetried,
                 CroppedWidth = preprocessed.Width,
                 CroppedHeight = preprocessed.Height,
                 OcrRegionCount = regions.Regions.Count,
@@ -384,6 +450,51 @@ public sealed class ScanHandler
         {
             return (0, 0);
         }
+    }
+
+    private static async Task<byte[]> Rotate180Async(byte[] bytes, CancellationToken ct)
+    {
+        await using var input = new MemoryStream(bytes, writable: false);
+        using var img = await Image.LoadAsync<Rgba32>(input, ct);
+        img.Mutate(c => c.Rotate(RotateMode.Rotate180));
+
+        await using var output = new MemoryStream();
+        await img.SaveAsJpegAsync(output, ct);
+        return output.ToArray();
+    }
+
+    // Counts zones that have meaningful content. The Name 3-char floor and RulesText
+    // 12-char floor mirror the cutoffs used elsewhere — short strings on those zones
+    // are usually OCR noise rather than real card text.
+    private static int ZoneCoverageScore(CardZones zones)
+    {
+        var score = 0;
+        if (!string.IsNullOrWhiteSpace(zones.Name) && zones.Name.Trim().Length >= 3)
+        {
+            score++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(zones.TypeLine))
+        {
+            score++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(zones.RulesText) && zones.RulesText.Trim().Length >= 12)
+        {
+            score++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(zones.PowerToughness))
+        {
+            score++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(zones.BottomMetadata))
+        {
+            score++;
+        }
+
+        return score;
     }
 
     private RecognitionConfidence ClassifyConfidence(IReadOnlyList<CardCandidateResponse> ranked, IReadOnlyList<FinalRow> rows)
