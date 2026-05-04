@@ -6,8 +6,11 @@ COPY src/LupiraMtgApi/ src/LupiraMtgApi/
 RUN dotnet publish src/LupiraMtgApi/LupiraMtgApi.csproj -c Release -o /out --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# libfontconfig1 is required by SkiaSharp.NativeAssets.Linux — without it the SkiaSharp
+# native init (SKImageInfo cctor) throws DllNotFoundException on the first icon
+# rasterize, breaking the set-symbol pipeline.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl \
+ && apt-get install -y --no-install-recommends ca-certificates curl libfontconfig1 \
  && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /app/bin /app/cache
 COPY --from=build /out /app/bin
