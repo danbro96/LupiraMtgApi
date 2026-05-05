@@ -9,6 +9,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using LupiraMtgApi.Models.Scans;
 using LupiraMtgApi.Services.Imaging;
 using LupiraMtgApi.Services.Ocr;
@@ -20,6 +21,31 @@ namespace LupiraMtgApi.Handlers;
 
 public sealed class ScanHandler
 {
+    // OpenTelemetry source for the scan pipeline. Picked up by the global subscription
+    // `AddSource("LupiraMtgApi.*")` in Program.cs. Each scan emits a root `scan` span
+    // with child spans per phase; tags on the root span capture the recognition outcome
+    // so OpenObserve can filter/aggregate by confidence, top set, rotation retry, etc.
+    private static readonly ActivitySource ScanActivity = new("LupiraMtgApi.Scans");
+
+    // Metrics — spans answer "what happened on this one scan", metrics answer "what's
+    // the p95 OCR latency this week" and "how many Low-confidence scans today". Tag
+    // domains are intentionally bounded (confidence, has_phash, has_ocr) — anything
+    // unbounded (printing id, set code, owner) belongs on spans, not metric tags.
+    private static readonly Meter ScanMeter = new("LupiraMtgApi.Scans");
+    private static readonly Histogram<double> ScanDurationHist = ScanMeter.CreateHistogram<double>("scan.duration_ms", unit: "ms", description: "End-to-end scan latency");
+    private static readonly Histogram<double> OcrDurationHist = ScanMeter.CreateHistogram<double>("scan.ocr.duration_ms", unit: "ms", description: "OCR latency including any rotation-retry pass");
+    private static readonly Histogram<double> PhashDurationHist = ScanMeter.CreateHistogram<double>("scan.phash.duration_ms", unit: "ms", description: "pHash compute + index search latency");
+    private static readonly Histogram<int> OcrRegionHist = ScanMeter.CreateHistogram<int>("scan.ocr.region_count", description: "Number of OCR regions returned by Florence");
+    private static readonly Histogram<int> PhashCandidateHist = ScanMeter.CreateHistogram<int>("scan.phash.candidate_count", description: "BK-tree candidates within the hamming cutoff");
+    private static readonly Histogram<int> ZoneCoverageHist = ScanMeter.CreateHistogram<int>("scan.zone.coverage", description: "Number of zones with meaningful content (0..5)");
+    private static readonly Histogram<double> TopCombinedHist = ScanMeter.CreateHistogram<double>("scan.top.combined_score", description: "Final combined score of the top candidate");
+    private static readonly Counter<long> ConfidenceCounter = ScanMeter.CreateCounter<long>("scan.confidence.total", description: "Scans by confidence outcome");
+    private static readonly Counter<long> RotationRetryCounter = ScanMeter.CreateCounter<long>("scan.rotation.retried.total", description: "Scans that ran the alt-rotation OCR pass");
+    private static readonly Counter<long> CropFailureCounter = ScanMeter.CreateCounter<long>("scan.crop.failures.total", description: "Crop preprocessor exceptions");
+    private static readonly Counter<long> OcrFailureCounter = ScanMeter.CreateCounter<long>("scan.ocr.failures.total", description: "Florence OCR-call exceptions");
+    private static readonly Counter<long> PhashFailureCounter = ScanMeter.CreateCounter<long>("scan.phash.failures.total", description: "pHash compute exceptions");
+    private static readonly Counter<long> UploadFailureCounter = ScanMeter.CreateCounter<long>("scan.upload.failures.total", description: "MinIO upload exceptions on the scan path");
+
     private const int MaxImageBytes = 4 * 1024 * 1024;
     private const int PHashTopK = 10;
     private const int FinalTopN = 5;
@@ -108,6 +134,13 @@ public sealed class ScanHandler
 
         httpContext.TryGetOwnerSub(out var ownerSub);
 
+        var scanStopwatch = Stopwatch.StartNew();
+        using var rootSpan = ScanActivity.StartActivity("scan");
+        rootSpan?.SetTag("scan.id", scanId);
+        rootSpan?.SetTag("scan.owner_sub", ownerSub ?? "anon");
+        rootSpan?.SetTag("scan.image_bytes", imageBytes.Length);
+        rootSpan?.SetTag("scan.media_type", inputMediaType);
+
         // Upload the original (pre-crop) image so a future, smarter extractor can
         // re-process the user's actual capture rather than our cropped derivative.
         // Best-effort: a MinIO failure must not break scanning.
@@ -116,32 +149,44 @@ public sealed class ScanHandler
             : null;
         var uploadTask = imageObjectKey is null
             ? Task.FromResult(false)
-            : this.UploadOriginalAsync(imageObjectKey, imageBytes, inputMediaType, ct);
+            : this.UploadOriginalAsync(imageObjectKey, imageBytes, inputMediaType, scanId, ct);
 
         CardCropResult preprocessed;
-        try
+        using (var cropSpan = ScanActivity.StartActivity("crop.preprocess"))
         {
-            preprocessed = await _crop.PreprocessAsync(imageBytes, inputMediaType, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Card crop preprocessing failed; continuing with original image");
-            var (fallbackW, fallbackH) = ProbeImageSize(imageBytes);
-            preprocessed = new CardCropResult
+            try
             {
-                Bytes = imageBytes,
-                MediaType = inputMediaType,
-                Cropped = false,
-                CropConfidence = 0.0,
-                Width = fallbackW,
-                Height = fallbackH,
-            };
+                preprocessed = await _crop.PreprocessAsync(imageBytes, inputMediaType, ct);
+                cropSpan?.SetTag("crop.success", true);
+                cropSpan?.SetTag("crop.cropped", preprocessed.Cropped);
+                cropSpan?.SetTag("crop.confidence", preprocessed.CropConfidence);
+                cropSpan?.SetTag("crop.rotated", preprocessed.Rotated);
+                cropSpan?.SetTag("crop.width", preprocessed.Width);
+                cropSpan?.SetTag("crop.height", preprocessed.Height);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Card crop preprocessing failed for scan {ScanId}; continuing with original image", scanId);
+                cropSpan?.SetTag("crop.success", false);
+                cropSpan?.SetTag("error.type", ex.GetType().Name);
+                CropFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
+                var (fallbackW, fallbackH) = ProbeImageSize(imageBytes);
+                preprocessed = new CardCropResult
+                {
+                    Bytes = imageBytes,
+                    MediaType = inputMediaType,
+                    Cropped = false,
+                    CropConfidence = 0.0,
+                    Width = fallbackW,
+                    Height = fallbackH,
+                };
+            }
         }
 
-        var pHashTask = this.RunPHashAsync(preprocessed.Bytes);
-        var ocrTask = this.RunOcrRegionsAsync(preprocessed.Bytes, preprocessed.MediaType, ct);
+        var pHashTask = this.RunPHashAsync(preprocessed.Bytes, scanId);
+        var ocrTask = this.RunOcrRegionsAsync(preprocessed.Bytes, preprocessed.MediaType, scanId, ct);
         var symbolTask = preprocessed.Cropped
-            ? _symbolDetector.DetectAsync(preprocessed.Bytes, preprocessed.MediaType, ct)
+            ? this.RunSymbolDetectAsync(preprocessed.Bytes, preprocessed.MediaType, ct)
             : Task.FromResult<SetSymbolMatch?>(null);
 
         await Task.WhenAll(pHashTask, ocrTask, symbolTask, uploadTask);
@@ -150,9 +195,14 @@ public sealed class ScanHandler
         var symbolMatch = symbolTask.Result;
         var imageUploaded = uploadTask.Result;
 
-        var zones = preprocessed.Width > 0 && preprocessed.Height > 0
-            ? _zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
-            : CardZones.Empty;
+        CardZones zones;
+        using (var zoneSpan = ScanActivity.StartActivity("zone.classify"))
+        {
+            zones = preprocessed.Width > 0 && preprocessed.Height > 0
+                ? _zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
+                : CardZones.Empty;
+            zoneSpan?.SetTag("zone.coverage_score", ZoneCoverageScore(zones));
+        }
 
         // Two-pass OCR: when CardCropService had to rotate (landscape bbox → portrait),
         // it picked clockwise by default. If the first pass produced sparse zones the card
@@ -162,13 +212,15 @@ public sealed class ScanHandler
         var rotationRetried = false;
         if (preprocessed.Rotated && ZoneCoverageScore(zones) < RotationRetryCoverageThreshold)
         {
+            using var retrySpan = ScanActivity.StartActivity("rotation.retry");
+            retrySpan?.SetTag("rotation.first_pass_score", ZoneCoverageScore(zones));
             try
             {
                 var altBytes = await Rotate180Async(preprocessed.Bytes, ct);
-                var altPHashTask = this.RunPHashAsync(altBytes);
-                var altOcrTask = this.RunOcrRegionsAsync(altBytes, preprocessed.MediaType, ct);
+                var altPHashTask = this.RunPHashAsync(altBytes, scanId);
+                var altOcrTask = this.RunOcrRegionsAsync(altBytes, preprocessed.MediaType, scanId, ct);
                 var altSymbolTask = preprocessed.Cropped
-                    ? _symbolDetector.DetectAsync(altBytes, preprocessed.MediaType, ct)
+                    ? this.RunSymbolDetectAsync(altBytes, preprocessed.MediaType, ct)
                     : Task.FromResult<SetSymbolMatch?>(null);
 
                 await Task.WhenAll(altPHashTask, altOcrTask, altSymbolTask);
@@ -180,7 +232,10 @@ public sealed class ScanHandler
                     ? _zoneClassifier.Classify(altRegions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
                     : CardZones.Empty;
 
-                if (ZoneCoverageScore(altZones) > ZoneCoverageScore(zones))
+                var altCoverage = ZoneCoverageScore(altZones);
+                retrySpan?.SetTag("rotation.alt_pass_score", altCoverage);
+
+                if (altCoverage > ZoneCoverageScore(zones))
                 {
                     rotationRetried = true;
                     zones = altZones;
@@ -200,6 +255,8 @@ public sealed class ScanHandler
                     };
                 }
 
+                retrySpan?.SetTag("rotation.alt_won", rotationRetried);
+
                 // Add both passes' latencies regardless of which pass won, so telemetry
                 // reflects the true time cost of the retry.
                 ocrLatencyMs += altOcrLatencyMs;
@@ -207,11 +264,18 @@ public sealed class ScanHandler
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Rotation retry failed; keeping first-pass results");
+                _logger.LogWarning(ex, "Rotation retry failed for scan {ScanId}; keeping first-pass results", scanId);
+                retrySpan?.SetTag("error.type", ex.GetType().Name);
             }
         }
 
-        var scoringResult = await _zoneScorer.ScoreAsync(zones, symbolMatch, ct);
+        CardZoneScoringResult scoringResult;
+        using (var scoreSpan = ScanActivity.StartActivity("zone.score"))
+        {
+            scoringResult = await _zoneScorer.ScoreAsync(zones, symbolMatch, ct);
+            scoreSpan?.SetTag("zone.candidate_count", scoringResult.ByPrinting.Count);
+            scoreSpan?.SetTag("zone.weights_total", scoringResult.Weights.TotalPresent);
+        }
 
         var byPrinting = new Dictionary<string, FinalRow>(StringComparer.Ordinal);
         foreach (var (id, scores) in scoringResult.ByPrinting)
@@ -243,7 +307,13 @@ public sealed class ScanHandler
         // (expansion/core/masters) outrank funny/memorabilia near-ties on the same
         // OracleId. Done before the final sort so a strongly-weighted printing can
         // overtake a weakly-weighted one inside the top-N cut.
-        var weights = await this.LoadSetTypeWeightsAsync(byPrinting.Keys, ct);
+        Dictionary<string, (string SetCode, string? SetType, double Weight)> weights;
+        using (var weightsSpan = ScanActivity.StartActivity("set_type_weights.load"))
+        {
+            weights = await this.LoadSetTypeWeightsAsync(byPrinting.Keys, ct);
+            weightsSpan?.SetTag("set_type_weights.count", weights.Count);
+        }
+
         foreach (var row in byPrinting.Values)
         {
             if (weights.TryGetValue(row.PrintingId, out var info))
@@ -261,7 +331,14 @@ public sealed class ScanHandler
             .Take(FinalTopN)
             .ToList();
 
-        var (ranked, hydratedRows) = await this.HydrateCandidatesAsync(top, ct);
+        List<CardCandidateResponse> ranked;
+        List<FinalRow> hydratedRows;
+        using (var hydrateSpan = ScanActivity.StartActivity("hydrate"))
+        {
+            (ranked, hydratedRows) = await this.HydrateCandidatesAsync(top, ct);
+            hydrateSpan?.SetTag("hydrate.count", ranked.Count);
+        }
+
         var confidence = this.ClassifyConfidence(ranked, hydratedRows);
 
         var response = new ScanResponse
@@ -299,8 +376,92 @@ public sealed class ScanHandler
             },
         };
 
+        // Outcome tags on the root span. Filterable in OpenObserve — e.g.
+        //   service.name=lupira-mtg-api AND scan.confidence=Low AND scan.phash.candidate_count=0
+        // shows the "card never matches" cohort that motivates the next round of tuning.
+        var topCandidate = ranked.FirstOrDefault();
+        var topRow = hydratedRows.FirstOrDefault();
+        rootSpan?.SetTag("scan.confidence", confidence.ToString());
+        rootSpan?.SetTag("scan.crop.cropped", preprocessed.Cropped);
+        rootSpan?.SetTag("scan.crop.confidence", preprocessed.CropConfidence);
+        rootSpan?.SetTag("scan.crop.rotated", preprocessed.Rotated);
+        rootSpan?.SetTag("scan.rotation.retried", rotationRetried);
+        rootSpan?.SetTag("scan.ocr.region_count", regions.Regions.Count);
+        rootSpan?.SetTag("scan.ocr.candidate_count", scoringResult.ByPrinting.Count);
+        rootSpan?.SetTag("scan.phash.candidate_count", pHashHits.Count);
+        rootSpan?.SetTag("scan.phash.has_index", _pHashIndex.IsLoaded);
+        rootSpan?.SetTag("scan.symbol.matched", symbolMatch is not null);
+        rootSpan?.SetTag("scan.symbol.set_code", symbolMatch?.SetCode);
+        rootSpan?.SetTag("scan.symbol.hamming", symbolMatch?.HammingDistance);
+        if (topCandidate is not null)
+        {
+            rootSpan?.SetTag("scan.top.printing_id", topCandidate.Printing.Id);
+            rootSpan?.SetTag("scan.top.set_code", topCandidate.Printing.SetCode);
+            rootSpan?.SetTag("scan.top.combined", topCandidate.CombinedScore);
+            rootSpan?.SetTag("scan.top.ocr_aggregate", topCandidate.OcrAggregateScore);
+            rootSpan?.SetTag("scan.top.phash", topCandidate.HammingScore);
+            rootSpan?.SetTag("scan.top.set_type_weight", topCandidate.SetTypeWeight);
+            rootSpan?.SetTag("scan.top.set_type", topRow?.SetType);
+        }
+
+        // Greppable one-liner summary. Trace_id is auto-correlated by the OTel logger,
+        // so this line is the bridge between log search ("show me Low-confidence scans")
+        // and trace deep-dive (jump to the flame graph for that scan).
+        _logger.LogInformation(
+            "Scan {ScanId} -> {Confidence} top={TopName} set={TopSetCode} combined={Combined:F3} ocr={OcrAgg:F3} pHash={PHashScore:F3} cropRotated={Rotated} retried={Retried} ocrRegions={Regions} pHashCandidates={PHashCandidates}",
+            scanId,
+            confidence,
+            topCandidate?.Printing.Name ?? "(none)",
+            topCandidate?.Printing.SetCode ?? "-",
+            topCandidate?.CombinedScore ?? 0.0,
+            topCandidate?.OcrAggregateScore ?? 0.0,
+            topCandidate?.HammingScore ?? 0.0,
+            preprocessed.Rotated,
+            rotationRetried,
+            regions.Regions.Count,
+            pHashHits.Count);
+
+        // Metrics — histograms get tagged with bounded-domain dimensions only. The
+        // scan.confidence counter splits by outcome so dashboards can chart the daily
+        // High/Medium/Low ratio without scraping spans.
+        scanStopwatch.Stop();
+        var confidenceTag = new KeyValuePair<string, object?>("confidence", confidence.ToString());
+        var rotatedTag = new KeyValuePair<string, object?>("crop.rotated", preprocessed.Rotated);
+        var retriedTag = new KeyValuePair<string, object?>("rotation.retried", rotationRetried);
+        ScanDurationHist.Record(scanStopwatch.Elapsed.TotalMilliseconds, confidenceTag, rotatedTag, retriedTag);
+        OcrDurationHist.Record(ocrLatencyMs, retriedTag);
+        PhashDurationHist.Record(pHashLatencyMs, retriedTag);
+        OcrRegionHist.Record(regions.Regions.Count);
+        PhashCandidateHist.Record(pHashHits.Count);
+        ZoneCoverageHist.Record(ZoneCoverageScore(zones));
+        if (topCandidate is not null)
+        {
+            TopCombinedHist.Record(topCandidate.CombinedScore, confidenceTag);
+        }
+
+        ConfidenceCounter.Add(1, confidenceTag);
+        if (rotationRetried)
+        {
+            RotationRetryCounter.Add(1);
+        }
+
+        // Verbose detail for investigations. Default off in production; bump the logger
+        // level to Debug for `LupiraMtgApi.Handlers.ScanHandler` to enable.
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Scan {ScanId} zones name={Name} type={Type} pt={PT} meta={Meta} rules.len={RulesLen}",
+                scanId,
+                zones.Name,
+                zones.TypeLine,
+                zones.PowerToughness,
+                zones.BottomMetadata,
+                zones.RulesText?.Length ?? 0);
+        }
+
         if (!string.IsNullOrEmpty(ownerSub))
         {
+            using var persistSpan = ScanActivity.StartActivity("persist_log");
             await this.PersistScanLogAsync(
                 scanId,
                 ownerSub,
@@ -388,14 +549,23 @@ public sealed class ScanHandler
     private const double ArtCropXMin = 0.07;
     private const double ArtCropXMax = 0.93;
 
-    private Task<(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)> RunPHashAsync(byte[] imageBytes)
+    private Task<(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)> RunPHashAsync(byte[] imageBytes, Guid scanId)
     {
+        // Capture the parent activity context so the Task.Run continuation parents its
+        // span under the root scan span, not under the thread-pool worker's empty
+        // context. Without this, the phash span would orphan from the trace tree.
+        var parent = Activity.Current;
         return Task.Run(() =>
         {
+            using var span = ScanActivity.StartActivity("phash.compute", ActivityKind.Internal, parent?.Context ?? default);
             if (!_pHashIndex.IsLoaded)
             {
+                span?.SetTag("phash.index_loaded", false);
                 return ((long?) null, 0, (IReadOnlyList<PHashIndex.PHashHit>) Array.Empty<PHashIndex.PHashHit>());
             }
+
+            span?.SetTag("phash.index_loaded", true);
+            span?.SetTag("phash.index_size", _pHashIndex.Count);
 
             var sw = Stopwatch.StartNew();
             long hash;
@@ -412,41 +582,69 @@ public sealed class ScanHandler
                 // Sanity-check: a degenerate crop region means the input image is too
                 // small to extract a meaningful art region — fall back to hashing the
                 // whole image (nothing to lose vs. the previous behavior).
-                if (w >= 32 && h >= 32 && x >= 0 && y >= 0 && x + w <= img.Width && y + h <= img.Height)
+                var artExtracted = w >= 32 && h >= 32 && x >= 0 && y >= 0 && x + w <= img.Width && y + h <= img.Height;
+                if (artExtracted)
                 {
                     img.Mutate(ctx => ctx.Crop(new Rectangle(x, y, w, h)));
                 }
 
+                span?.SetTag("phash.art_extracted", artExtracted);
                 hash = _pHash.Compute(img);
             }
             catch (Exception ex)
             {
                 sw.Stop();
-                _logger.LogWarning(ex, "pHash compute failed; falling back to OCR-only candidates");
+                _logger.LogWarning(ex, "pHash compute failed for scan {ScanId}; falling back to OCR-only candidates", scanId);
+                span?.SetTag("error.type", ex.GetType().Name);
+                PhashFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
                 return ((long?) null, (int) sw.ElapsedMilliseconds, (IReadOnlyList<PHashIndex.PHashHit>) Array.Empty<PHashIndex.PHashHit>());
             }
 
             var hits = _pHashIndex.Search(hash, PHashMaxHamming).Take(PHashTopK).ToList();
             sw.Stop();
+            span?.SetTag("phash.hash", hash);
+            span?.SetTag("phash.hit_count", hits.Count);
+            span?.SetTag("phash.best_hamming", hits.Count > 0 ? hits[0].Distance : -1);
             return ((long?) hash, (int) sw.ElapsedMilliseconds, (IReadOnlyList<PHashIndex.PHashHit>) hits);
         });
     }
 
-    private async Task<(OcrRegions Regions, int LatencyMs)> RunOcrRegionsAsync(byte[] imageBytes, string mediaType, CancellationToken ct)
+    private async Task<(OcrRegions Regions, int LatencyMs)> RunOcrRegionsAsync(byte[] imageBytes, string mediaType, Guid scanId, CancellationToken ct)
     {
+        using var span = ScanActivity.StartActivity("ocr.regions");
+        span?.SetTag("ocr.image_bytes", imageBytes.Length);
+
         var sw = Stopwatch.StartNew();
         try
         {
             var regions = await _ocr.ReadRegionsAsync(imageBytes, mediaType, ct);
             sw.Stop();
+            span?.SetTag("ocr.region_count", regions.Regions.Count);
             return (regions, (int) sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogWarning(ex, "OCR regions call failed; falling back to pHash-only candidates");
+            _logger.LogWarning(ex, "OCR regions call failed for scan {ScanId}; falling back to pHash-only candidates", scanId);
+            span?.SetTag("error.type", ex.GetType().Name);
+            OcrFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
             return (OcrRegions.Empty, (int) sw.ElapsedMilliseconds);
         }
+    }
+
+    private async Task<SetSymbolMatch?> RunSymbolDetectAsync(byte[] bytes, string mediaType, CancellationToken ct)
+    {
+        using var span = ScanActivity.StartActivity("symbol.detect");
+        var match = await _symbolDetector.DetectAsync(bytes, mediaType, ct);
+        span?.SetTag("symbol.matched", match is not null);
+        if (match is not null)
+        {
+            span?.SetTag("symbol.set_code", match.SetCode);
+            span?.SetTag("symbol.hamming", match.HammingDistance);
+            span?.SetTag("symbol.score", match.Score);
+        }
+
+        return match;
     }
 
     // When only one of pHash/OCR contributes, scale that signal's weight to 1.0.
@@ -608,17 +806,24 @@ public sealed class ScanHandler
         return $"scans/{ownerSub}/{scannedAt:yyyy}/{scannedAt:MM}/{scanId:N}.{ext}";
     }
 
-    private async Task<bool> UploadOriginalAsync(string objectKey, byte[] bytes, string mediaType, CancellationToken ct)
+    private async Task<bool> UploadOriginalAsync(string objectKey, byte[] bytes, string mediaType, Guid scanId, CancellationToken ct)
     {
+        using var span = ScanActivity.StartActivity("upload.original");
+        span?.SetTag("upload.object_key", objectKey);
+        span?.SetTag("upload.bytes", bytes.Length);
         try
         {
             using var ms = new MemoryStream(bytes, writable: false);
             await _images.PutAsync(objectKey, ms, mediaType, ct);
+            span?.SetTag("upload.success", true);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to upload scan image to object store at key {ObjectKey}", objectKey);
+            _logger.LogWarning(ex, "Failed to upload scan image for scan {ScanId} to object store at key {ObjectKey}", scanId, objectKey);
+            span?.SetTag("upload.success", false);
+            span?.SetTag("error.type", ex.GetType().Name);
+            UploadFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
             return false;
         }
     }

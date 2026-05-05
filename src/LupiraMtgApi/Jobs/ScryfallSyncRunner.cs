@@ -4,6 +4,8 @@ using LupiraMtgApi.Models;
 using LupiraMtgApi.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Globalization;
 using LupiraMtgApi.Models.Sync;
 using LupiraMtgApi.Services.Imaging;
@@ -14,6 +16,25 @@ namespace LupiraMtgApi.Jobs;
 
 public sealed class ScryfallSyncRunner
 {
+    // OpenTelemetry plumbing for the long-running sync job. Without these the sync
+    // is a black box — only `started`/`completed` log lines exist, and a 4-hour
+    // sync gives no per-phase visibility. ActivitySource produces the trace tree
+    // (sync.run → sync.sets, sync.set_icons, sync.printings); the meter exposes
+    // throughput so dashboards can chart printings/sec or icon-fetches/sec over
+    // a sync run, and counters track outcome totals across runs.
+    private static readonly ActivitySource SyncActivity = new("LupiraMtgApi.Sync");
+    private static readonly Meter SyncMeter = new("LupiraMtgApi.Sync");
+    private static readonly Histogram<double> SyncDurationHist = SyncMeter.CreateHistogram<double>("scryfall.sync.duration_ms", unit: "ms", description: "End-to-end sync run time");
+    private static readonly Histogram<double> SetsPhaseHist = SyncMeter.CreateHistogram<double>("scryfall.sync.sets.duration_ms", unit: "ms", description: "Set metadata upsert phase");
+    private static readonly Histogram<double> IconsPhaseHist = SyncMeter.CreateHistogram<double>("scryfall.sync.set_icons.duration_ms", unit: "ms", description: "Per-set SVG download + rasterize phase");
+    private static readonly Histogram<double> PrintingsPhaseHist = SyncMeter.CreateHistogram<double>("scryfall.sync.printings.duration_ms", unit: "ms", description: "Per-printing upsert + image + pHash phase");
+    private static readonly Histogram<double> IndexRebuildHist = SyncMeter.CreateHistogram<double>("scryfall.sync.index_rebuild.duration_ms", unit: "ms", description: "Post-sync BK-tree rebuild");
+    private static readonly Counter<long> PrintingsAddedCounter = SyncMeter.CreateCounter<long>("scryfall.sync.printings.added.total");
+    private static readonly Counter<long> PrintingsUpdatedCounter = SyncMeter.CreateCounter<long>("scryfall.sync.printings.updated.total");
+    private static readonly Counter<long> ImagesUploadedCounter = SyncMeter.CreateCounter<long>("scryfall.sync.images.uploaded.total");
+    private static readonly Counter<long> IconRasterFailureCounter = SyncMeter.CreateCounter<long>("scryfall.sync.icons.failures.total");
+    private static readonly Counter<long> SyncFailureCounter = SyncMeter.CreateCounter<long>("scryfall.sync.failures.total");
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ScryfallSyncOptions _options;
     private readonly ILogger<ScryfallSyncRunner> _logger;
@@ -30,6 +51,8 @@ public sealed class ScryfallSyncRunner
 
     public async Task<SyncRunResponse> RunAsync(CancellationToken ct)
     {
+        using var rootSpan = SyncActivity.StartActivity("scryfall.sync.run");
+        var runStopwatch = Stopwatch.StartNew();
         var report = new SyncRunResponse
         {
             Status = "running",
@@ -50,9 +73,35 @@ public sealed class ScryfallSyncRunner
 
             await images.EnsureBucketAsync(ct);
 
-            await SyncSetsAsync(db, source, ct);
-            await this.SyncSetIconsAsync(db, source, images, symbolRasterizer, report, ct);
-            await this.SyncPrintingsAsync(db, source, images, pHash, report, ct);
+            using (var setsSpan = SyncActivity.StartActivity("scryfall.sync.sets"))
+            {
+                var sw = Stopwatch.StartNew();
+                await SyncSetsAsync(db, source, ct);
+                sw.Stop();
+                SetsPhaseHist.Record(sw.Elapsed.TotalMilliseconds);
+                setsSpan?.SetTag("sets.duration_ms", sw.Elapsed.TotalMilliseconds);
+            }
+
+            using (var iconsSpan = SyncActivity.StartActivity("scryfall.sync.set_icons"))
+            {
+                var sw = Stopwatch.StartNew();
+                await this.SyncSetIconsAsync(db, source, images, symbolRasterizer, report, ct);
+                sw.Stop();
+                IconsPhaseHist.Record(sw.Elapsed.TotalMilliseconds);
+                iconsSpan?.SetTag("icons.duration_ms", sw.Elapsed.TotalMilliseconds);
+            }
+
+            using (var printingsSpan = SyncActivity.StartActivity("scryfall.sync.printings"))
+            {
+                var sw = Stopwatch.StartNew();
+                await this.SyncPrintingsAsync(db, source, images, pHash, report, ct);
+                sw.Stop();
+                PrintingsPhaseHist.Record(sw.Elapsed.TotalMilliseconds);
+                printingsSpan?.SetTag("printings.total", report.PrintingsTotal);
+                printingsSpan?.SetTag("printings.added", report.PrintingsAdded);
+                printingsSpan?.SetTag("printings.updated", report.PrintingsUpdated);
+                printingsSpan?.SetTag("printings.duration_ms", sw.Elapsed.TotalMilliseconds);
+            }
 
             report.Status = "completed";
             report.FinishedAt = DateTimeOffset.UtcNow;
@@ -65,22 +114,42 @@ public sealed class ScryfallSyncRunner
                 report.PHashesComputed,
                 report.FinishedAt - report.StartedAt);
 
-            try
+            PrintingsAddedCounter.Add(report.PrintingsAdded);
+            PrintingsUpdatedCounter.Add(report.PrintingsUpdated);
+            ImagesUploadedCounter.Add(report.ImagesUploaded);
+
+            using (var rebuildSpan = SyncActivity.StartActivity("scryfall.sync.phash_index_rebuild"))
             {
-                await pHashIndex.RebuildAsync(ct);
-            }
-            catch (Exception rebuildEx)
-            {
-                _logger.LogWarning(rebuildEx, "PHashIndex rebuild after sync failed; recognition will use the previous index until next sync");
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    await pHashIndex.RebuildAsync(ct);
+                    sw.Stop();
+                    IndexRebuildHist.Record(sw.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("index", "phash"));
+                    _logger.LogInformation("PHashIndex rebuilt in {Duration}ms", sw.Elapsed.TotalMilliseconds);
+                }
+                catch (Exception rebuildEx)
+                {
+                    _logger.LogWarning(rebuildEx, "PHashIndex rebuild after sync failed; recognition will use the previous index until next sync");
+                    rebuildSpan?.SetTag("error.type", rebuildEx.GetType().Name);
+                }
             }
 
-            try
+            using (var rebuildSpan = SyncActivity.StartActivity("scryfall.sync.symbol_index_rebuild"))
             {
-                await symbolIndex.RebuildAsync(ct);
-            }
-            catch (Exception rebuildEx)
-            {
-                _logger.LogWarning(rebuildEx, "SetSymbolIndex rebuild after sync failed; set-symbol detection will use the previous index until next sync");
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    await symbolIndex.RebuildAsync(ct);
+                    sw.Stop();
+                    IndexRebuildHist.Record(sw.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("index", "symbol"));
+                    _logger.LogInformation("SetSymbolIndex rebuilt in {Duration}ms", sw.Elapsed.TotalMilliseconds);
+                }
+                catch (Exception rebuildEx)
+                {
+                    _logger.LogWarning(rebuildEx, "SetSymbolIndex rebuild after sync failed; set-symbol detection will use the previous index until next sync");
+                    rebuildSpan?.SetTag("error.type", rebuildEx.GetType().Name);
+                }
             }
         }
         catch (Exception ex)
@@ -89,6 +158,19 @@ public sealed class ScryfallSyncRunner
             report.FinishedAt = DateTimeOffset.UtcNow;
             report.Error = ex.Message;
             _logger.LogError(ex, "Scryfall sync failed");
+            rootSpan?.SetTag("error.type", ex.GetType().Name);
+            SyncFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
+        }
+        finally
+        {
+            runStopwatch.Stop();
+            SyncDurationHist.Record(runStopwatch.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("status", report.Status));
+            rootSpan?.SetTag("sync.status", report.Status);
+            rootSpan?.SetTag("sync.printings_total", report.PrintingsTotal);
+            rootSpan?.SetTag("sync.printings_added", report.PrintingsAdded);
+            rootSpan?.SetTag("sync.printings_updated", report.PrintingsUpdated);
+            rootSpan?.SetTag("sync.images_uploaded", report.ImagesUploaded);
+            rootSpan?.SetTag("sync.phashes_computed", report.PHashesComputed);
         }
 
         return report;
@@ -185,6 +267,7 @@ public sealed class ScryfallSyncRunner
                     ex,
                     "Set icon rasterize/upload failed for {SetCode}; will retry on next sync",
                     entity.Code);
+                IconRasterFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
             }
         }
 

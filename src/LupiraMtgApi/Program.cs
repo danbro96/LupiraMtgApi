@@ -211,6 +211,7 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
             .AddHttpClientInstrumentation()
             .AddOtlpExporter())
         .WithMetrics(m => m
+            .AddMeter("LupiraMtgApi.*")
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddRuntimeInstrumentation()

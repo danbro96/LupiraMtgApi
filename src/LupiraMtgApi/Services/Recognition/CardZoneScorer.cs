@@ -1,12 +1,20 @@
 using LupiraMtgApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using LupiraMtgApi.Services.SetSymbol;
 namespace LupiraMtgApi.Services.Recognition;
 
 public sealed class CardZoneScorer
 {
+    // Reuses the LupiraMtgApi.Scans source so per-zone spans nest under the parent
+    // `zone.score` span set by ScanHandler. Tagging each query with its hit count and
+    // the input text length lets us see at-a-glance which zones are the bottleneck on
+    // a slow scan and which cutoffs are too tight (zero hits = candidate filter
+    // possibly too aggressive, hits == TopK = scan got truncated).
+    private static readonly ActivitySource ZoneActivity = new("LupiraMtgApi.Scans");
+
     // Tolerates inline whitespace and U+2044 fraction slash; not anchored so OCR noise
     // around the P/T cluster (e.g. mana-cost glyphs misread as digits) doesn't kill the
     // match. The match itself locks onto a `<P>/<T>` pair, which is enough.
@@ -62,12 +70,15 @@ public sealed class CardZoneScorer
 
     private async Task ScoreNameAsync(string text, Dictionary<string, PrintingZoneScores> byPrinting, CancellationToken ct)
     {
+        using var span = ZoneActivity.StartActivity("zone.score.name");
         if (string.IsNullOrWhiteSpace(text))
         {
+            span?.SetTag("zone.skipped", "empty");
             return;
         }
 
         var trimmed = text.Trim();
+        span?.SetTag("zone.input_length", trimmed.Length);
         var rows = await _db.CardPrintings
             .AsNoTracking()
             .Select(p => new { p.Id, Score = EF.Functions.TrigramsWordSimilarity(p.Name, trimmed) })
@@ -75,6 +86,11 @@ public sealed class CardZoneScorer
             .OrderByDescending(x => x.Score)
             .Take(_options.NameTopK)
             .ToListAsync(ct);
+
+        span?.SetTag("zone.hit_count", rows.Count);
+        span?.SetTag("zone.cutoff", _options.NameCutoff);
+        span?.SetTag("zone.top_k", _options.NameTopK);
+        span?.SetTag("zone.best_score", rows.Count > 0 ? rows[0].Score : 0.0);
 
         foreach (var r in rows)
         {
@@ -84,12 +100,15 @@ public sealed class CardZoneScorer
 
     private async Task ScoreTypeLineAsync(string text, Dictionary<string, PrintingZoneScores> byPrinting, CancellationToken ct)
     {
+        using var span = ZoneActivity.StartActivity("zone.score.type_line");
         if (string.IsNullOrWhiteSpace(text))
         {
+            span?.SetTag("zone.skipped", "empty");
             return;
         }
 
         var trimmed = text.Trim();
+        span?.SetTag("zone.input_length", trimmed.Length);
         var rows = await _db.CardPrintings
             .AsNoTracking()
             .Where(p => p.TypeLineFull != null)
@@ -99,6 +118,11 @@ public sealed class CardZoneScorer
             .Take(_options.TypeLineTopK)
             .ToListAsync(ct);
 
+        span?.SetTag("zone.hit_count", rows.Count);
+        span?.SetTag("zone.cutoff", _options.TypeLineCutoff);
+        span?.SetTag("zone.top_k", _options.TypeLineTopK);
+        span?.SetTag("zone.best_score", rows.Count > 0 ? rows[0].Score : 0.0);
+
         foreach (var r in rows)
         {
             GetOrAdd(byPrinting, r.Id).TypeLineScore = r.Score;
@@ -107,8 +131,10 @@ public sealed class CardZoneScorer
 
     private async Task ScoreRulesTextAsync(string text, Dictionary<string, PrintingZoneScores> byPrinting, CancellationToken ct)
     {
+        using var span = ZoneActivity.StartActivity("zone.score.rules_text");
         if (string.IsNullOrWhiteSpace(text))
         {
+            span?.SetTag("zone.skipped", "empty");
             return;
         }
 
@@ -116,8 +142,12 @@ public sealed class CardZoneScorer
         if (trimmed.Length < 12)
         {
             // Trigram similarity on tiny strings is unreliable; skip rather than mislead.
+            span?.SetTag("zone.skipped", "too_short");
+            span?.SetTag("zone.input_length", trimmed.Length);
             return;
         }
+
+        span?.SetTag("zone.input_length", trimmed.Length);
 
         // word_similarity (not similarity) — the OCR captures rules text + flavor text
         // together, since the card prints them adjacently and Florence has no concept of
@@ -139,6 +169,11 @@ public sealed class CardZoneScorer
             .Take(_options.RulesTextTopK)
             .ToListAsync(ct);
 
+        span?.SetTag("zone.hit_count", rows.Count);
+        span?.SetTag("zone.cutoff", _options.RulesTextCutoff);
+        span?.SetTag("zone.top_k", _options.RulesTextTopK);
+        span?.SetTag("zone.best_score", rows.Count > 0 ? rows[0].Score : 0.0);
+
         foreach (var r in rows)
         {
             GetOrAdd(byPrinting, r.Id).RulesTextScore = r.Score;
@@ -147,19 +182,25 @@ public sealed class CardZoneScorer
 
     private async Task ScorePowerToughnessAsync(string text, Dictionary<string, PrintingZoneScores> byPrinting, CancellationToken ct)
     {
+        using var span = ZoneActivity.StartActivity("zone.score.power_toughness");
         if (string.IsNullOrWhiteSpace(text) || byPrinting.Count == 0)
         {
+            span?.SetTag("zone.skipped", string.IsNullOrWhiteSpace(text) ? "empty" : "no_pool");
             return;
         }
 
         var match = PowerToughnessRegex.Match(text.Trim());
         if (!match.Success)
         {
+            span?.SetTag("zone.skipped", "regex_no_match");
             return;
         }
 
         var power = match.Groups[1].Value;
         var toughness = match.Groups[2].Value;
+        span?.SetTag("zone.parsed_power", power);
+        span?.SetTag("zone.parsed_toughness", toughness);
+        span?.SetTag("zone.pool_size", byPrinting.Count);
 
         // Only score printings already in the candidate pool — P/T alone is too weak to
         // bootstrap candidates and would balloon the union.
@@ -169,6 +210,7 @@ public sealed class CardZoneScorer
             .Where(p => candidateIds.Contains(p.Id) && (p.Power != null || p.Toughness != null))
             .Select(p => new { p.Id, p.Power, p.Toughness })
             .ToListAsync(ct);
+        span?.SetTag("zone.hit_count", rows.Count);
 
         foreach (var r in rows)
         {
@@ -193,14 +235,18 @@ public sealed class CardZoneScorer
         Dictionary<string, PrintingZoneScores> byPrinting,
         CancellationToken ct)
     {
+        using var span = ZoneActivity.StartActivity("zone.score.bottom_metadata");
+        span?.SetTag("zone.symbol_match", symbolMatch is not null);
         if (string.IsNullOrWhiteSpace(text))
         {
+            span?.SetTag("zone.skipped", "empty");
             return;
         }
 
         var collectorMatch = CollectorRegex.Match(text);
         if (!collectorMatch.Success)
         {
+            span?.SetTag("zone.skipped", "no_collector_regex_match");
             return;
         }
 
