@@ -378,6 +378,16 @@ public sealed class ScanHandler
         return (ranked, hydratedRows);
     }
 
+    // Modern-frame art rectangle, in card-relative coords. Aspect 0.86×0.45 normalized
+    // by card aspect 0.72 = 1.37, matching Scryfall's art_crop. The BK-tree was built on
+    // hashes of Scryfall's art_crop bytes during sync, so the scan-side hash must come
+    // from the same rectangle of the photo — hashing the full card produces a signature
+    // dominated by frame + text, which has near-zero correlation with art-only hashes.
+    private const double ArtCropYMin = 0.10;
+    private const double ArtCropYMax = 0.555;
+    private const double ArtCropXMin = 0.07;
+    private const double ArtCropXMax = 0.93;
+
     private Task<(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)> RunPHashAsync(byte[] imageBytes)
     {
         return Task.Run(() =>
@@ -388,11 +398,26 @@ public sealed class ScanHandler
             }
 
             var sw = Stopwatch.StartNew();
-            using var stream = new MemoryStream(imageBytes);
             long hash;
             try
             {
-                hash = _pHash.Compute(stream);
+                using var stream = new MemoryStream(imageBytes);
+                using var img = Image.Load<Rgba32>(stream);
+
+                var x = (int) Math.Round(img.Width * ArtCropXMin);
+                var y = (int) Math.Round(img.Height * ArtCropYMin);
+                var w = (int) Math.Round(img.Width * (ArtCropXMax - ArtCropXMin));
+                var h = (int) Math.Round(img.Height * (ArtCropYMax - ArtCropYMin));
+
+                // Sanity-check: a degenerate crop region means the input image is too
+                // small to extract a meaningful art region — fall back to hashing the
+                // whole image (nothing to lose vs. the previous behavior).
+                if (w >= 32 && h >= 32 && x >= 0 && y >= 0 && x + w <= img.Width && y + h <= img.Height)
+                {
+                    img.Mutate(ctx => ctx.Crop(new Rectangle(x, y, w, h)));
+                }
+
+                hash = _pHash.Compute(img);
             }
             catch (Exception ex)
             {

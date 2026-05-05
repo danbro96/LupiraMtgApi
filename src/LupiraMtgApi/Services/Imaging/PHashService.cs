@@ -28,4 +28,12 @@ public sealed class PHashService
         var hash = _algorithm.Hash(img);
         return unchecked((long) hash);
     }
+
+    // For callers that already have the image decoded (e.g., extracting an art crop from
+    // a card photo) — skips the load+encode round-trip.
+    public long Compute(Image<Rgba32> image)
+    {
+        var hash = _algorithm.Hash(image);
+        return unchecked((long) hash);
+    }
 }
