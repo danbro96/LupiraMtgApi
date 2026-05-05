@@ -29,14 +29,14 @@ public sealed class CollectionsHandler
         HttpContext httpContext,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
         var docs = await Marten.QueryableExtensions.ToListAsync(
             _session.Query<CollectionDocument>()
-                .Where(c => c.OwnerSub == sub && !c.Removed)
+                .Where(c => c.OwnerId == ownerId && !c.IsRemoved)
                 .OrderBy(c => c.Name),
             ct);
 
@@ -59,7 +59,7 @@ public sealed class CollectionsHandler
         CreateCollectionRequest request,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
@@ -74,9 +74,9 @@ public sealed class CollectionsHandler
         var doc = new CollectionDocument
         {
             Id = Guid.NewGuid(),
-            OwnerSub = sub,
+            OwnerId = ownerId,
             Name = name,
-            Removed = false,
+            IsRemoved = false,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -99,12 +99,12 @@ public sealed class CollectionsHandler
         Guid collectionId,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -128,7 +128,7 @@ public sealed class CollectionsHandler
         RenameCollectionRequest request,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
@@ -139,7 +139,7 @@ public sealed class CollectionsHandler
             return TypedResults.BadRequest($"Name must be 1..{MaxNameLength} characters.");
         }
 
-        var doc = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -165,18 +165,18 @@ public sealed class CollectionsHandler
         Guid collectionId,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
         }
 
-        doc.Removed = true;
+        doc.IsRemoved = true;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         _session.Store(doc);
         await _session.SaveChangesAsync(ct);
@@ -189,12 +189,12 @@ public sealed class CollectionsHandler
         Guid collectionId,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -210,12 +210,12 @@ public sealed class CollectionsHandler
         AddCardToCollectionRequest request,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -234,7 +234,7 @@ public sealed class CollectionsHandler
         {
             InstanceId = Guid.NewGuid(),
             PrintingId = request.PrintingId,
-            Foil = request.Foil,
+            IsFoil = request.IsFoil,
             Language = string.IsNullOrEmpty(request.Language) ? "en" : request.Language,
             Condition = string.IsNullOrEmpty(request.Condition) ? "NM" : request.Condition,
             AcquiredAt = DateTimeOffset.UtcNow,
@@ -255,12 +255,12 @@ public sealed class CollectionsHandler
         Guid instanceId,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -285,7 +285,7 @@ public sealed class CollectionsHandler
         MoveCardRequest request,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
@@ -295,13 +295,13 @@ public sealed class CollectionsHandler
             return TypedResults.BadRequest("Source and destination collections are the same.");
         }
 
-        var source = await this.LoadOwnedAsync(collectionId, sub, ct);
+        var source = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (source is null)
         {
             return TypedResults.NotFound();
         }
 
-        var destination = await this.LoadOwnedAsync(request.ToCollectionId, sub, ct);
+        var destination = await this.LoadOwnedAsync(request.ToCollectionId, ownerId, ct);
         if (destination is null)
         {
             return TypedResults.NotFound();
@@ -327,10 +327,10 @@ public sealed class CollectionsHandler
         return TypedResults.Ok(hydrated.Single());
     }
 
-    private async Task<CollectionDocument?> LoadOwnedAsync(Guid id, string ownerSub, CancellationToken ct)
+    private async Task<CollectionDocument?> LoadOwnedAsync(Guid id, Guid ownerId, CancellationToken ct)
     {
         var doc = await _session.LoadAsync<CollectionDocument>(id, ct);
-        if (doc is null || doc.OwnerSub != ownerSub || doc.Removed)
+        if (doc is null || doc.OwnerId != ownerId || doc.IsRemoved)
         {
             return null;
         }

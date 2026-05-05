@@ -19,7 +19,7 @@ public sealed class SelectionEntryResponse
 
     public required CardPrintingResponse Printing { get; set; }
 
-    public required bool Foil { get; set; }
+    public required bool IsFoil { get; set; }
 
     public required string Language { get; set; }
 
@@ -32,7 +32,7 @@ public sealed class AddSelectionEntryRequest
 {
     public required string PrintingId { get; set; }
 
-    public bool Foil { get; set; }
+    public bool IsFoil { get; set; }
 
     public string Language { get; set; } = "en";
 

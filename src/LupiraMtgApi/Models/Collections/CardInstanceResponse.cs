@@ -8,7 +8,7 @@ public sealed class CardInstanceResponse
 
     public required CardPrintingResponse Printing { get; set; }
 
-    public required bool Foil { get; set; }
+    public required bool IsFoil { get; set; }
 
     public required string Language { get; set; }
 

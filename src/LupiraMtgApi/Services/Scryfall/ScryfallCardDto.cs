@@ -32,7 +32,7 @@ public sealed class ScryfallCardDto
     public ScryfallPrices? Prices { get; set; }
 
     [JsonPropertyName("digital")]
-    public bool Digital { get; set; }
+    public bool IsDigital { get; set; }
 
     [JsonPropertyName("layout")]
     public string Layout { get; set; } = string.Empty;
@@ -62,5 +62,5 @@ public sealed class ScryfallCardDto
     public ScryfallCardFace[]? CardFaces { get; set; }
 
     [JsonPropertyName("foil")]
-    public bool Foil { get; set; }
+    public bool IsFoil { get; set; }
 }

@@ -30,7 +30,7 @@ public sealed class SelectionsHandler
         HttpContext httpContext,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
@@ -39,7 +39,7 @@ public sealed class SelectionsHandler
         var doc = new SelectionDocument
         {
             Id = Guid.NewGuid(),
-            OwnerSub = sub,
+            OwnerId = ownerId,
             Cards = new List<SelectionEntry>(),
             CreatedAt = now,
             ExpiresAt = now.Add(DefaultTtl),
@@ -56,12 +56,12 @@ public sealed class SelectionsHandler
         Guid selectionId,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(selectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -76,12 +76,12 @@ public sealed class SelectionsHandler
         AddSelectionEntryRequest request,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(selectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -103,7 +103,7 @@ public sealed class SelectionsHandler
         {
             var clash = doc.Cards.Any(c =>
                 c.PrintingId == request.PrintingId &&
-                c.Foil == request.Foil &&
+                c.IsFoil == request.IsFoil &&
                 string.Equals(c.Language, language, StringComparison.OrdinalIgnoreCase));
             if (clash)
             {
@@ -115,7 +115,7 @@ public sealed class SelectionsHandler
         {
             InstanceId = Guid.NewGuid(),
             PrintingId = request.PrintingId,
-            Foil = request.Foil,
+            IsFoil = request.IsFoil,
             Language = language,
             Condition = condition,
             Confidence = Math.Clamp(request.Confidence, 0.0, 1.0),
@@ -135,12 +135,12 @@ public sealed class SelectionsHandler
         Guid instanceId,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var doc = await this.LoadOwnedAsync(selectionId, sub, ct);
+        var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
         {
             return TypedResults.NotFound();
@@ -163,19 +163,19 @@ public sealed class SelectionsHandler
         CommitSelectionRequest request,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var selection = await this.LoadOwnedAsync(selectionId, sub, ct);
+        var selection = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (selection is null)
         {
             return TypedResults.NotFound();
         }
 
         var collection = await _session.LoadAsync<CollectionDocument>(request.CollectionId, ct);
-        if (collection is null || collection.OwnerSub != sub || collection.Removed)
+        if (collection is null || collection.OwnerId != ownerId || collection.IsRemoved)
         {
             return TypedResults.NotFound();
         }
@@ -197,7 +197,7 @@ public sealed class SelectionsHandler
             {
                 InstanceId = entry.InstanceId,
                 PrintingId = entry.PrintingId,
-                Foil = entry.Foil,
+                IsFoil = entry.IsFoil,
                 Language = entry.Language,
                 Condition = entry.Condition,
                 AcquiredAt = now,
@@ -221,10 +221,10 @@ public sealed class SelectionsHandler
         });
     }
 
-    private async Task<SelectionDocument?> LoadOwnedAsync(Guid id, string ownerSub, CancellationToken ct)
+    private async Task<SelectionDocument?> LoadOwnedAsync(Guid id, Guid ownerId, CancellationToken ct)
     {
         var doc = await _session.LoadAsync<SelectionDocument>(id, ct);
-        if (doc is null || doc.OwnerSub != ownerSub || doc.ExpiresAt < DateTimeOffset.UtcNow)
+        if (doc is null || doc.OwnerId != ownerId || doc.ExpiresAt < DateTimeOffset.UtcNow)
         {
             return null;
         }

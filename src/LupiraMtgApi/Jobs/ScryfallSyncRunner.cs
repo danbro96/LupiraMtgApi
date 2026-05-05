@@ -296,7 +296,7 @@ public sealed class ScryfallSyncRunner
         {
             ct.ThrowIfCancellationRequested();
 
-            if (dto.Digital)
+            if (dto.IsDigital)
             {
                 continue;
             }
@@ -442,7 +442,7 @@ public sealed class ScryfallSyncRunner
         entity.Toughness = toughness;
         entity.Lang = lang;
         entity.Layout = layout;
-        entity.IsFoil = dto.Foil;
+        entity.IsFoil = dto.IsFoil;
     }
 
     private static Dictionary<string, decimal>? MapPrices(ScryfallPrices? prices)

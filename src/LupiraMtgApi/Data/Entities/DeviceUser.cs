@@ -2,7 +2,7 @@ namespace LupiraMtgApi.Data.Entities;
 
 public sealed class DeviceUser
 {
-    public Guid Sub { get; set; }
+    public Guid Id { get; set; }
 
     public required string TokenHash { get; set; }
 

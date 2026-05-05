@@ -145,7 +145,7 @@ public sealed class CardCropService
         {
             Bytes = ms.ToArray(),
             MediaType = outMediaType,
-            Cropped = true,
+            IsCropped = true,
             CropConfidence = confidence,
             Width = outputW,
             Height = outputH,
@@ -181,7 +181,7 @@ public sealed class CardCropService
         {
             Bytes = bytes,
             MediaType = mediaType,
-            Cropped = false,
+            IsCropped = false,
             CropConfidence = cropConfidence,
             Width = width,
             Height = height,

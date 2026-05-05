@@ -4,11 +4,11 @@ public sealed class CollectionDocument
 {
     public Guid Id { get; set; }
 
-    public required string OwnerSub { get; set; }
+    public required Guid OwnerId { get; set; }
 
     public required string Name { get; set; }
 
-    public bool Removed { get; set; }
+    public bool IsRemoved { get; set; }
 
     public List<CardInstance> Cards { get; set; } = new();
 
@@ -23,7 +23,7 @@ public sealed class CardInstance
 
     public required string PrintingId { get; set; }
 
-    public required bool Foil { get; set; }
+    public required bool IsFoil { get; set; }
 
     public required string Language { get; set; }
 

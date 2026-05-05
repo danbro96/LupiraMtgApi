@@ -8,7 +8,7 @@ public sealed class ScanDebug
 
     public long? ImagePHash { get; set; }
 
-    public required bool Cropped { get; set; }
+    public required bool IsCropped { get; set; }
 
     public required double CropConfidence { get; set; }
 

@@ -2,7 +2,7 @@ namespace LupiraMtgApi.Domain.UserProfile;
 
 public sealed class UserProfileDocument
 {
-    public required string Sub { get; set; }
+    public required Guid Id { get; set; }
 
     public string? DisplayName { get; set; }
 

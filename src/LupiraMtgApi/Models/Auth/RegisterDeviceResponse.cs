@@ -2,7 +2,7 @@ namespace LupiraMtgApi.Models.Auth;
 
 public sealed class RegisterDeviceResponse
 {
-    public required Guid Sub { get; set; }
+    public required Guid Id { get; set; }
 
     public required string Token { get; set; }
 

@@ -6,7 +6,7 @@ public sealed class CardCropResult
 
     public required string MediaType { get; set; }
 
-    public required bool Cropped { get; set; }
+    public required bool IsCropped { get; set; }
 
     public required double CropConfidence { get; set; }
 

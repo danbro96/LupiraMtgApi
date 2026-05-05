@@ -66,7 +66,7 @@ public sealed class DeviceTokenAuthenticationHandler : AuthenticationHandler<Dev
 
         var claims = new List<Claim>
         {
-            new("sub", device.Sub.ToString()),
+            new("sub", device.Id.ToString()),
         };
         if (!string.IsNullOrEmpty(device.DisplayName))
         {

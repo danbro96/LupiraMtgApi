@@ -20,14 +20,14 @@ public sealed class MyCardsHandler
         HttpContext httpContext,
         CancellationToken ct)
     {
-        if (!httpContext.TryGetOwnerSub(out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
         var collections = await Marten.QueryableExtensions.ToListAsync(
             _session.Query<CollectionDocument>()
-                .Where(c => c.OwnerSub == sub && !c.Removed),
+                .Where(c => c.OwnerId == ownerId && !c.IsRemoved),
             ct);
 
         var allCards = collections.SelectMany(c => c.Cards).ToList();

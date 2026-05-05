@@ -37,7 +37,7 @@ builder.Services
     .AddMarten(opts =>
     {
         opts.Connection(connectionString);
-        opts.DatabaseSchemaName = "public";
+        opts.DatabaseSchemaName = "users";
         opts.UseSystemTextJsonForSerialization();
         MartenRegistrations.Configure(opts);
     })

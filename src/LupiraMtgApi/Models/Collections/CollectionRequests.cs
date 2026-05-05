@@ -14,7 +14,7 @@ public sealed class AddCardToCollectionRequest
 {
     public required string PrintingId { get; set; }
 
-    public bool Foil { get; set; }
+    public bool IsFoil { get; set; }
 
     public string Language { get; set; } = "en";
 

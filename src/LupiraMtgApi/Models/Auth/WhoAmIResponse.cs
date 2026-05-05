@@ -2,7 +2,7 @@ namespace LupiraMtgApi.Models.Auth;
 
 public sealed class WhoAmIResponse
 {
-    public required Guid Sub { get; set; }
+    public required Guid Id { get; set; }
 
     public string? DisplayName { get; set; }
 

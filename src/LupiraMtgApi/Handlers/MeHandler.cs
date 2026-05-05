@@ -2,9 +2,10 @@ using LupiraMtgApi.Auth;
 using LupiraMtgApi.Data;
 using LupiraMtgApi.Data.Entities;
 using LupiraMtgApi.Models;
+using LupiraMtgApi.Models.Auth;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
-using LupiraMtgApi.Models.Auth;
+
 namespace LupiraMtgApi.Handlers;
 
 public sealed class MeHandler
@@ -22,7 +23,7 @@ public sealed class MeHandler
         var now = DateTimeOffset.UtcNow;
         var device = new DeviceUser
         {
-            Sub = Guid.NewGuid(),
+            Id = Guid.NewGuid(),
             TokenHash = hash,
             DisplayName = string.IsNullOrWhiteSpace(request?.DisplayName) ? null : request.DisplayName.Trim(),
             CreatedAt = now,
@@ -34,7 +35,7 @@ public sealed class MeHandler
 
         return TypedResults.Ok(new RegisterDeviceResponse
         {
-            Sub = device.Sub,
+            Id = device.Id,
             Token = token,
             DisplayName = device.DisplayName,
         });
@@ -42,13 +43,12 @@ public sealed class MeHandler
 
     public async Task<Results<Ok<WhoAmIResponse>, UnauthorizedHttpResult>> WhoAmIAsync(HttpContext httpContext, CancellationToken ct)
     {
-        var subClaim = httpContext.User.FindFirst("sub")?.Value;
-        if (!Guid.TryParse(subClaim, out var sub))
+        if (!httpContext.TryGetOwnerId(out var ownerId))
         {
             return TypedResults.Unauthorized();
         }
 
-        var device = await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Sub == sub, ct);
+        var device = await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Id == ownerId, ct);
         if (device is null)
         {
             return TypedResults.Unauthorized();
@@ -56,7 +56,7 @@ public sealed class MeHandler
 
         return TypedResults.Ok(new WhoAmIResponse
         {
-            Sub = device.Sub,
+            Id = device.Id,
             DisplayName = device.DisplayName,
             CreatedAt = device.CreatedAt,
             LastSeenAt = device.LastSeenAt,

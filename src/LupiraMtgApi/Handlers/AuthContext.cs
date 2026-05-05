@@ -4,9 +4,9 @@ namespace LupiraMtgApi.Handlers;
 
 internal static class AuthContext
 {
-    public static bool TryGetOwnerSub(this HttpContext context, out string ownerSub)
+    public static bool TryGetOwnerId(this HttpContext context, out Guid ownerId)
     {
-        ownerSub = context.User.FindFirstValue("sub") ?? string.Empty;
-        return !string.IsNullOrEmpty(ownerSub);
+        var raw = context.User.FindFirstValue("sub");
+        return Guid.TryParse(raw, out ownerId);
     }
 }

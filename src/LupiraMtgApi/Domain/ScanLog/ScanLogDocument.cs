@@ -7,7 +7,7 @@ public sealed class ScanLogDocument
 {
     public Guid Id { get; set; }
 
-    public required string OwnerSub { get; set; }
+    public required Guid OwnerId { get; set; }
 
     public DateTimeOffset ScannedAt { get; set; }
 
@@ -25,7 +25,7 @@ public sealed class ScanLogDocument
 
     public int OcrLatencyMs { get; set; }
 
-    public bool Cropped { get; set; }
+    public bool IsCropped { get; set; }
 
     public double CropConfidence { get; set; }
 

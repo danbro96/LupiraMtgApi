@@ -132,20 +132,20 @@ public sealed class ScanHandler
         var scanId = Guid.NewGuid();
         var scannedAt = DateTimeOffset.UtcNow;
 
-        httpContext.TryGetOwnerSub(out var ownerSub);
+        var hasOwner = httpContext.TryGetOwnerId(out var ownerId);
 
         var scanStopwatch = Stopwatch.StartNew();
         using var rootSpan = ScanActivity.StartActivity("scan");
         rootSpan?.SetTag("scan.id", scanId);
-        rootSpan?.SetTag("scan.owner_sub", ownerSub ?? "anon");
+        rootSpan?.SetTag("scan.owner_id", hasOwner ? ownerId.ToString() : "anon");
         rootSpan?.SetTag("scan.image_bytes", imageBytes.Length);
         rootSpan?.SetTag("scan.media_type", inputMediaType);
 
         // Upload the original (pre-crop) image so a future, smarter extractor can
         // re-process the user's actual capture rather than our cropped derivative.
         // Best-effort: a MinIO failure must not break scanning.
-        var imageObjectKey = !string.IsNullOrEmpty(ownerSub)
-            ? BuildScanObjectKey(ownerSub, scannedAt, scanId, inputMediaType)
+        var imageObjectKey = hasOwner
+            ? BuildScanObjectKey(ownerId, scannedAt, scanId, inputMediaType)
             : null;
         var uploadTask = imageObjectKey is null
             ? Task.FromResult(false)
@@ -158,7 +158,7 @@ public sealed class ScanHandler
             {
                 preprocessed = await _crop.PreprocessAsync(imageBytes, inputMediaType, ct);
                 cropSpan?.SetTag("crop.success", true);
-                cropSpan?.SetTag("crop.cropped", preprocessed.Cropped);
+                cropSpan?.SetTag("crop.cropped", preprocessed.IsCropped);
                 cropSpan?.SetTag("crop.confidence", preprocessed.CropConfidence);
                 cropSpan?.SetTag("crop.rotated", preprocessed.Rotated);
                 cropSpan?.SetTag("crop.width", preprocessed.Width);
@@ -175,7 +175,7 @@ public sealed class ScanHandler
                 {
                     Bytes = imageBytes,
                     MediaType = inputMediaType,
-                    Cropped = false,
+                    IsCropped = false,
                     CropConfidence = 0.0,
                     Width = fallbackW,
                     Height = fallbackH,
@@ -185,7 +185,7 @@ public sealed class ScanHandler
 
         var pHashTask = this.RunPHashAsync(preprocessed.Bytes, scanId);
         var ocrTask = this.RunOcrRegionsAsync(preprocessed.Bytes, preprocessed.MediaType, scanId, ct);
-        var symbolTask = preprocessed.Cropped
+        var symbolTask = preprocessed.IsCropped
             ? this.RunSymbolDetectAsync(preprocessed.Bytes, preprocessed.MediaType, ct)
             : Task.FromResult<SetSymbolMatch?>(null);
 
@@ -199,7 +199,7 @@ public sealed class ScanHandler
         using (var zoneSpan = ScanActivity.StartActivity("zone.classify"))
         {
             zones = preprocessed.Width > 0 && preprocessed.Height > 0
-                ? _zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
+                ? _zoneClassifier.Classify(regions, preprocessed.Width, preprocessed.Height, preprocessed.IsCropped)
                 : CardZones.Empty;
             zoneSpan?.SetTag("zone.coverage_score", ZoneCoverageScore(zones));
         }
@@ -219,7 +219,7 @@ public sealed class ScanHandler
                 var altBytes = await Rotate180Async(preprocessed.Bytes, ct);
                 var altPHashTask = this.RunPHashAsync(altBytes, scanId);
                 var altOcrTask = this.RunOcrRegionsAsync(altBytes, preprocessed.MediaType, scanId, ct);
-                var altSymbolTask = preprocessed.Cropped
+                var altSymbolTask = preprocessed.IsCropped
                     ? this.RunSymbolDetectAsync(altBytes, preprocessed.MediaType, ct)
                     : Task.FromResult<SetSymbolMatch?>(null);
 
@@ -229,7 +229,7 @@ public sealed class ScanHandler
                 var altSymbolMatch = altSymbolTask.Result;
 
                 var altZones = preprocessed.Width > 0 && preprocessed.Height > 0
-                    ? _zoneClassifier.Classify(altRegions, preprocessed.Width, preprocessed.Height, preprocessed.Cropped)
+                    ? _zoneClassifier.Classify(altRegions, preprocessed.Width, preprocessed.Height, preprocessed.IsCropped)
                     : CardZones.Empty;
 
                 var altCoverage = ZoneCoverageScore(altZones);
@@ -247,7 +247,7 @@ public sealed class ScanHandler
                     {
                         Bytes = altBytes,
                         MediaType = preprocessed.MediaType,
-                        Cropped = preprocessed.Cropped,
+                        IsCropped = preprocessed.IsCropped,
                         CropConfidence = preprocessed.CropConfidence,
                         Width = preprocessed.Width,
                         Height = preprocessed.Height,
@@ -362,7 +362,7 @@ public sealed class ScanHandler
                     Score = symbolMatch.Score,
                 },
                 ImagePHash = imageHash,
-                Cropped = preprocessed.Cropped,
+                IsCropped = preprocessed.IsCropped,
                 CropConfidence = preprocessed.CropConfidence,
                 CropRotated = preprocessed.Rotated,
                 RotationRetried = rotationRetried,
@@ -382,7 +382,7 @@ public sealed class ScanHandler
         var topCandidate = ranked.FirstOrDefault();
         var topRow = hydratedRows.FirstOrDefault();
         rootSpan?.SetTag("scan.confidence", confidence.ToString());
-        rootSpan?.SetTag("scan.crop.cropped", preprocessed.Cropped);
+        rootSpan?.SetTag("scan.crop.cropped", preprocessed.IsCropped);
         rootSpan?.SetTag("scan.crop.confidence", preprocessed.CropConfidence);
         rootSpan?.SetTag("scan.crop.rotated", preprocessed.Rotated);
         rootSpan?.SetTag("scan.rotation.retried", rotationRetried);
@@ -459,12 +459,12 @@ public sealed class ScanHandler
                 zones.RulesText?.Length ?? 0);
         }
 
-        if (!string.IsNullOrEmpty(ownerSub))
+        if (hasOwner)
         {
             using var persistSpan = ScanActivity.StartActivity("persist_log");
             await this.PersistScanLogAsync(
                 scanId,
-                ownerSub,
+                ownerId,
                 scannedAt,
                 imageUploaded ? imageObjectKey : null,
                 inputMediaType,
@@ -795,7 +795,7 @@ public sealed class ScanHandler
         return result;
     }
 
-    private static string BuildScanObjectKey(string ownerSub, DateTimeOffset scannedAt, Guid scanId, string mediaType)
+    private static string BuildScanObjectKey(Guid ownerId, DateTimeOffset scannedAt, Guid scanId, string mediaType)
     {
         var ext = mediaType switch
         {
@@ -803,7 +803,7 @@ public sealed class ScanHandler
             "image/webp" => "webp",
             _ => "jpg",
         };
-        return $"scans/{ownerSub}/{scannedAt:yyyy}/{scannedAt:MM}/{scanId:N}.{ext}";
+        return $"scans/{ownerId:N}/{scannedAt:yyyy}/{scannedAt:MM}/{scanId:N}.{ext}";
     }
 
     private async Task<bool> UploadOriginalAsync(string objectKey, byte[] bytes, string mediaType, Guid scanId, CancellationToken ct)
@@ -830,7 +830,7 @@ public sealed class ScanHandler
 
     private async Task PersistScanLogAsync(
         Guid scanId,
-        string ownerSub,
+        Guid ownerId,
         DateTimeOffset scannedAt,
         string? imageObjectKey,
         string imageMediaType,
@@ -853,7 +853,7 @@ public sealed class ScanHandler
             var doc = new ScanLogDocument
             {
                 Id = scanId,
-                OwnerSub = ownerSub,
+                OwnerId = ownerId,
                 ScannedAt = scannedAt,
                 ImageObjectKey = imageObjectKey,
                 ImageMediaType = imageMediaType,
@@ -862,7 +862,7 @@ public sealed class ScanHandler
                 Confidence = confidence,
                 PHashLatencyMs = pHashLatencyMs,
                 OcrLatencyMs = ocrLatencyMs,
-                Cropped = preprocessed.Cropped,
+                IsCropped = preprocessed.IsCropped,
                 CropConfidence = preprocessed.CropConfidence,
                 CroppedWidth = preprocessed.Width,
                 CroppedHeight = preprocessed.Height,

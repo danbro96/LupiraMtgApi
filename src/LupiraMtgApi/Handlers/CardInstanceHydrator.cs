@@ -53,7 +53,7 @@ public sealed class CardInstanceHydrator
             {
                 InstanceId = card.InstanceId,
                 Printing = printingResponse,
-                Foil = card.Foil,
+                IsFoil = card.IsFoil,
                 Language = card.Language,
                 Condition = card.Condition,
                 AcquiredAt = card.AcquiredAt,
@@ -92,7 +92,7 @@ public sealed class CardInstanceHydrator
             {
                 InstanceId = entry.InstanceId,
                 Printing = printingResponse,
-                Foil = entry.Foil,
+                IsFoil = entry.IsFoil,
                 Language = entry.Language,
                 Condition = entry.Condition,
                 Confidence = entry.Confidence,
