@@ -1,4 +1,5 @@
 using LupiraMtgApi.Handlers;
+using LupiraMtgApi.Models.Scans;
 using Microsoft.AspNetCore.Http;
 
 namespace LupiraMtgApi.Endpoints.Scans;
@@ -24,5 +25,8 @@ public static class ScanEndpoint
                 The `confidence` field (`high|medium|low`) drives the mobile UX: HIGH auto-adds the
                 top candidate to the active selection; MEDIUM offers a disambiguation picker; LOW
                 falls back to manual lookup.
-                """);
+                """)
+            .Accepts<IFormFile>("multipart/form-data")
+            .Produces<ScanResponse>(StatusCodes.Status200OK)
+            .Produces<string>(StatusCodes.Status400BadRequest);
 }

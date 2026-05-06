@@ -1,4 +1,5 @@
 using LupiraMtgApi.Handlers;
+using LupiraMtgApi.Models.Cards;
 
 namespace LupiraMtgApi.Endpoints.Cards;
 
@@ -17,5 +18,7 @@ public static class GetPrintingEndpoint
                 Returns a printing's metadata along with presigned URLs for the normal-size image
                 and the art crop (if present in the local image store). Returns 404 if the printing
                 is unknown to the local catalog (re-run sync if it should exist).
-                """);
+                """)
+            .Produces<CardPrintingResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
 }

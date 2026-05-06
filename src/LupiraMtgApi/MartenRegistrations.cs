@@ -28,6 +28,7 @@ public static class MartenRegistrations
             .DatabaseSchemaName("diagnostics")
             .Identity(x => x.Id)
             .Index(x => x.OwnerId)
-            .Index(x => x.ScannedAt);
+            .Index(x => x.ScannedAt)
+            .Index(x => x.FeedbackCorrectPrintingId);
     }
 }

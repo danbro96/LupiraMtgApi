@@ -131,6 +131,7 @@ builder.Services.AddScoped<IScanStep, RecordOutcomeStep>();
 builder.Services.AddScoped<IScanStep, PersistScanLogStep>();
 builder.Services.AddScoped<ScanPipeline>();
 builder.Services.AddScoped<ScanHandler>();
+builder.Services.AddScoped<ScanFeedbackHandler>();
 
 builder.Services.AddOpenApi("v1", options =>
 {
@@ -278,6 +279,7 @@ app.MapWhoAmI().RequireAuthorization();
 app.MapGetPrinting().RequireAuthorization();
 app.MapCardSearch().RequireAuthorization();
 app.MapScan().RequireAuthorization();
+app.MapScanFeedback().RequireAuthorization();
 app.MapAdminSync().RequireAuthorization();
 app.MapMyCards().RequireAuthorization();
 

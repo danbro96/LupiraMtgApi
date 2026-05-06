@@ -79,6 +79,7 @@ public sealed class ScanHandler
 
     private static ScanResponse BuildResponse(ScanContext ctx) => new()
     {
+        ScanId = ctx.ScanId,
         Confidence = ctx.Confidence,
         Candidates = ctx.Ranked,
         Debug = new ScanDebug

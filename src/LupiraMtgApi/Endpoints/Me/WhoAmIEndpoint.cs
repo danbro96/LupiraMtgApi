@@ -1,4 +1,5 @@
 using LupiraMtgApi.Handlers;
+using LupiraMtgApi.Models.Auth;
 
 namespace LupiraMtgApi.Endpoints.Me;
 
@@ -14,5 +15,7 @@ public static class WhoAmIEndpoint
                 Resolves the bearer token to its `sub` and returns the device's profile fields.
                 Useful as a smoke test for token validity from the mobile client (sanity-check
                 after registration or on app cold start).
-                """);
+                """)
+            .Produces<WhoAmIResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
 }

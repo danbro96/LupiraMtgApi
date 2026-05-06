@@ -14,5 +14,6 @@ public static class HealthEndpoint
                 """
                 Returns 200 with `{ "status": "ok" }` as soon as the process is up.
                 Used by the TrueNAS / Docker healthcheck. Anonymous — no token required.
-                """);
+                """)
+            .Produces<HealthResponse>(StatusCodes.Status200OK);
 }

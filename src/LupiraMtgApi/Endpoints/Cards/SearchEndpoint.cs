@@ -1,4 +1,5 @@
 using LupiraMtgApi.Handlers;
+using LupiraMtgApi.Models.Cards;
 
 namespace LupiraMtgApi.Endpoints.Cards;
 
@@ -23,5 +24,6 @@ public static class SearchEndpoint
                 `color` filters by single color identity letter (`W|U|B|R|G`).
                 `rarity` filters by `common|uncommon|rare|mythic|special`.
                 `limit` caps results (default 25, max 100).
-                """);
+                """)
+            .Produces<CardSearchResponse>(StatusCodes.Status200OK);
 }

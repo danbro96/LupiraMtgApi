@@ -22,5 +22,6 @@ public static class RegisterEndpoint
 
                 Mobile apps call this on first launch and reuse the issued token from then on.
                 IP-based rate limiting prevents registration spam.
-                """);
+                """)
+            .Produces<RegisterDeviceResponse>(StatusCodes.Status200OK);
 }

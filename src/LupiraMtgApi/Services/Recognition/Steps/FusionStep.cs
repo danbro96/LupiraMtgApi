@@ -5,10 +5,14 @@ namespace LupiraMtgApi.Services.Recognition.Steps;
 
 /// <summary>
 /// Merges per-zone OCR scores with pHash hits into a per-printing
-/// <see cref="RankedCandidate"/> dictionary, then computes the FinalScore for each
-/// candidate using fusion weights from <see cref="ScanScoringOptions"/>. Re-normalizes
-/// when only one signal contributes (pHash-only or OCR-only) so a single strong
-/// signal can still cross confidence thresholds.
+/// <see cref="RankedCandidate"/> dictionary, then computes a FinalScore by treating
+/// pHash and OCR as independent likelihood signals and combining them via probabilistic
+/// OR: <c>1 − (1 − ocrScore) × (1 − hammingScore)</c>. The combination is monotonic in
+/// each input, so adding a corroborating signal never lowers a candidate's score —
+/// fixing the prior bug where an OCR-only candidate could outrank an OCR+pHash
+/// candidate of the same oracle. The formula is parameter-free; <c>PHashWeight</c> and
+/// <c>OcrWeight</c> on <see cref="ScanScoringOptions"/> are unused by fusion now and
+/// remain only as no-op config keys for backward compatibility.
 /// </summary>
 public sealed class FusionStep : IScanStep
 {
@@ -23,13 +27,13 @@ public sealed class FusionStep : IScanStep
 
     public Task<ScanContext> ExecuteAsync(ScanContext ctx, CancellationToken ct)
     {
-        var scoring = ctx.ZoneScoring
+        _ = ctx.ZoneScoring
             ?? throw new InvalidOperationException("FusionStep requires ZoneScoreStep to have run first.");
 
         using var span = ScanTelemetry.Source.StartActivity("fusion");
 
         var byPrinting = new Dictionary<string, RankedCandidate>(StringComparer.Ordinal);
-        foreach (var (id, scores) in scoring.ByPrinting)
+        foreach (var (id, scores) in ctx.ZoneScoring.ByPrinting)
         {
             byPrinting[id] = new RankedCandidate
             {
@@ -51,29 +55,14 @@ public sealed class FusionStep : IScanStep
             row.HammingScore = Math.Clamp(1.0 - (hit.Distance / 64.0), 0.0, 1.0);
         }
 
-        var ocrSignalAvailable = scoring.Weights.TotalPresent > 0;
         foreach (var row in byPrinting.Values)
         {
-            var ocrScore = row.ZoneScores?.AggregateScore ?? 0.0;
-            var (wp, wo) = SelectFusionWeights(row.HammingDistance.HasValue, ocrSignalAvailable);
-            row.FinalScore = Math.Clamp((wp * row.HammingScore) + (wo * ocrScore), 0.0, 1.0);
+            var ocrScore = Math.Clamp(row.ZoneScores?.AggregateScore ?? 0.0, 0.0, 1.0);
+            var phashScore = Math.Clamp(row.HammingScore, 0.0, 1.0);
+            row.FinalScore = 1.0 - ((1.0 - ocrScore) * (1.0 - phashScore));
         }
 
         span?.SetTag("fusion.candidate_count", byPrinting.Count);
         return Task.FromResult(ctx with { ByPrinting = byPrinting });
     }
-
-    /// <summary>
-    /// When only one of pHash/OCR contributes, scale that signal's weight to 1.0 so a
-    /// perfect single-signal match isn't capped at <see cref="ScanScoringOptions.PHashWeight"/>
-    /// or <see cref="ScanScoringOptions.OcrWeight"/>. Mirrors the per-zone re-normalization
-    /// inside CardZoneScorer.
-    /// </summary>
-    private (double PHashWeight, double OcrWeight) SelectFusionWeights(bool hasPhash, bool hasOcr) => (hasPhash, hasOcr) switch
-    {
-        (true, true) => (_scoring.PHashWeight, _scoring.OcrWeight),
-        (true, false) => (1.0, 0.0),
-        (false, true) => (0.0, 1.0),
-        _ => (0.0, 0.0),
-    };
 }

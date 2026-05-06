@@ -1,4 +1,5 @@
 using LupiraMtgApi.Handlers;
+using LupiraMtgApi.Models.Sync;
 
 namespace LupiraMtgApi.Endpoints.Admin;
 
@@ -16,5 +17,6 @@ public static class SyncEndpoint
 
                 This endpoint is auth-gated; in production it should be restricted further (admin role)
                 once roles are introduced.
-                """);
+                """)
+            .Produces<SyncRunResponse>(StatusCodes.Status200OK);
 }

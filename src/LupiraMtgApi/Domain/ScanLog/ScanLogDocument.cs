@@ -67,6 +67,14 @@ public sealed class ScanLogDocument
     public string? ExtractedToughness { get; set; }
 
     public string? ExtractedBottomLeftMetadata { get; set; }
+
+    /// <summary>Printing the user told us was actually correct via the feedback endpoint. Null until feedback is submitted.</summary>
+    public string? FeedbackCorrectPrintingId { get; set; }
+
+    /// <summary>1-based rank of <see cref="FeedbackCorrectPrintingId"/> within <see cref="Candidates"/>; null when the correct printing wasn't in the candidate pool at all.</summary>
+    public int? FeedbackCorrectPrintingRank { get; set; }
+
+    public DateTimeOffset? FeedbackAt { get; set; }
 }
 
 public sealed class ScanLogCandidate
