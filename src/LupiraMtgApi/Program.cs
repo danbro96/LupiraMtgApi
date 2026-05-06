@@ -28,6 +28,8 @@ using LupiraMtgApi.Services.Recognition;
 using LupiraMtgApi.Services.Scryfall;
 using LupiraMtgApi.Services.SetSymbol;
 using LupiraMtgApi.Services.Storage;
+using LupiraMtgApi.Services.Recognition.Pipeline;
+using LupiraMtgApi.Services.Recognition.Steps;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
@@ -72,6 +74,7 @@ builder.Services.AddSingleton<CardZoneClassifier>();
 builder.Services.AddSingleton<SetSymbolRasterizer>();
 builder.Services.AddSingleton<SetSymbolIndex>();
 builder.Services.AddSingleton<SetSymbolDetector>();
+builder.Services.AddSingleton<ScanPHashRunner>();
 
 builder.Services.AddHttpClient<ICardCatalogSource, ScryfallCatalogSource>(client =>
 {
@@ -107,10 +110,27 @@ builder.Services.AddScoped<CardSearchHandler>();
 builder.Services.AddScoped<AdminSyncHandler>();
 builder.Services.AddScoped<MeHandler>();
 builder.Services.AddScoped<CardZoneScorer>();
-builder.Services.AddScoped<ScanHandler>();
 builder.Services.AddScoped<CollectionsHandler>();
 builder.Services.AddScoped<SelectionsHandler>();
 builder.Services.AddScoped<MyCardsHandler>();
+
+// Scan pipeline: each step registered as IScanStep in execution order. DI resolves
+// IEnumerable<IScanStep> in registration order, so the order below IS the pipeline.
+// Add or remove a step by editing this list — no surgery on ScanHandler.
+builder.Services.AddScoped<IScanStep, UploadOriginalStep>();
+builder.Services.AddScoped<IScanStep, CropStep>();
+builder.Services.AddScoped<IScanStep, PrimaryRecognitionStep>();
+builder.Services.AddScoped<IScanStep, ZoneClassifyStep>();
+builder.Services.AddScoped<IScanStep, ZoneScoreStep>();
+builder.Services.AddScoped<IScanStep, RotationRetryStep>();
+builder.Services.AddScoped<IScanStep, FusionStep>();
+builder.Services.AddScoped<IScanStep, SetTypeWeightStep>();
+builder.Services.AddScoped<IScanStep, HydrateStep>();
+builder.Services.AddScoped<IScanStep, ConfidenceStep>();
+builder.Services.AddScoped<IScanStep, RecordOutcomeStep>();
+builder.Services.AddScoped<IScanStep, PersistScanLogStep>();
+builder.Services.AddScoped<ScanPipeline>();
+builder.Services.AddScoped<ScanHandler>();
 
 builder.Services.AddOpenApi("v1", options =>
 {

@@ -41,4 +41,28 @@ public sealed class ScanScoringOptions
     // shifts on the frame; matching needs a bigger tolerance window. Empirically set to
     // 16 in initial deploy; tune from telemetry on the `phash.full_best_hamming` span tag.
     public int FullCardPHashMaxHamming { get; set; } = 16;
+
+    // ---- Pipeline structural limits (round-4 refactor moved these out of ScanHandler consts) ----
+
+    public int MaxImageBytes { get; set; } = 4 * 1024 * 1024;
+
+    public int PHashTopK { get; set; } = 10;
+
+    public int FinalTopN { get; set; } = 5;
+
+    public int PHashMaxHamming { get; set; } = 12;
+
+    /// <summary>If the cropper rotated to portrait but the first pass populates fewer than this many zones, run the 180° rotation retry.</summary>
+    public int RotationRetryCoverageThreshold { get; set; } = 3;
+
+    /// <summary>Skip the retry entirely when the first pass populates this many zones — it almost never wins from this state.</summary>
+    public int RotationRetryHighCoverageSkipThreshold { get; set; } = 4;
+
+    /// <summary>Per-zone score floor counting toward "strong agreement" on the borderline retry-skip path.</summary>
+    public double RotationRetryStrongZoneScoreThreshold { get; set; } = 0.7;
+
+    public int RotationRetryStrongZoneMinCount { get; set; } = 3;
+
+    /// <summary>Used when a printing's set has no matching set_type_weights row. Neutral midpoint.</summary>
+    public double DefaultSetTypeWeight { get; set; } = 0.5;
 }
