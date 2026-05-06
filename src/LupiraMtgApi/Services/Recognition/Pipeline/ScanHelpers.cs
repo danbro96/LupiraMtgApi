@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using LupiraMtgApi.Services.Ocr;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -83,4 +85,38 @@ internal static class ScanHelpers
 
     public static string? NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// Picks image dimensions to feed the zone classifier. Florence reports the dims it
+    /// actually OCR'd against; if those differ from the dims we computed locally by more
+    /// than 5% on either axis the upstream resized our image (e.g. enforced max edge),
+    /// and the OCR boxes are in Florence's coordinate space — so we must use Florence's
+    /// dims or every centroid lands in the wrong zone band. Tags divergence on the span
+    /// so we can spot the resize ratio in telemetry.
+    /// </summary>
+    public static (int Width, int Height) PickOcrDims(OcrRegions regions, int fallbackWidth, int fallbackHeight, Activity? span)
+    {
+        var fw = regions.ImageWidth;
+        var fh = regions.ImageHeight;
+        if (fw <= 0 || fh <= 0)
+        {
+            return (fallbackWidth, fallbackHeight);
+        }
+
+        if (fallbackWidth > 0 && fallbackHeight > 0)
+        {
+            var widthDelta = Math.Abs(fw - fallbackWidth) / (double) fallbackWidth;
+            var heightDelta = Math.Abs(fh - fallbackHeight) / (double) fallbackHeight;
+            if (widthDelta > 0.05 || heightDelta > 0.05)
+            {
+                span?.SetTag("ocr.image_size_divergence", true);
+                span?.SetTag("ocr.image_width.local", fallbackWidth);
+                span?.SetTag("ocr.image_height.local", fallbackHeight);
+                span?.SetTag("ocr.image_width.florence", fw);
+                span?.SetTag("ocr.image_height.florence", fh);
+            }
+        }
+
+        return (fw, fh);
+    }
 }

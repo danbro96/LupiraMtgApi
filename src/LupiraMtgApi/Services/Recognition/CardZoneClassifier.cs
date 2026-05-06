@@ -180,9 +180,13 @@ public sealed class CardZoneClassifier
             return string.Empty;
         }
 
-        // FlorenceApi's reading-order sort upstream means iteration order is already
-        // top-to-bottom, left-to-right within the zone subset.
+        // FlorenceApi's reading-order sort upstream is reliable today, but cheap to
+        // re-assert here so a quirk in a single region's box doesn't scramble the
+        // concatenation. Sort by box centroid (top-to-bottom, then left-to-right) so
+        // the joined text reads in human reading order even when upstream is permuted.
         var sorted = list
+            .OrderBy(r => r.Region.Box.CenterY)
+            .ThenBy(r => r.Region.Box.CenterX)
             .Select(r => r.Region.Text.Trim())
             .Where(t => !string.IsNullOrEmpty(t));
 

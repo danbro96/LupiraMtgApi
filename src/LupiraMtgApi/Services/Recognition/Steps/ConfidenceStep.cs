@@ -39,8 +39,10 @@ public sealed class ConfidenceStep : IScanStep
 
         if (best.CombinedScore >= _scoring.HighCombined && ctx.HydratedRows.Count > 0)
         {
-            var contributing = ctx.HydratedRows[0].ZoneScores?.ContributingZoneCount(_scoring.HighZoneAgreementMinScore) ?? 0;
-            if (contributing >= _scoring.HighZoneAgreementMinCount)
+            var topRow = ctx.HydratedRows[0];
+            var contributing = topRow.ZoneScores?.ContributingZoneCount(_scoring.HighZoneAgreementMinScore) ?? 0;
+            if (contributing >= _scoring.HighZoneAgreementMinCount
+                && HasConfidentContributingZone(topRow.ZoneScores, ctx.Zones))
             {
                 return RecognitionConfidence.High;
             }
@@ -52,5 +54,32 @@ public sealed class ConfidenceStep : IScanStep
         }
 
         return RecognitionConfidence.Low;
+    }
+
+    /// <summary>
+    /// Requires that at least one zone the candidate scored well on (≥ <see cref="ScanScoringOptions.HighZoneAgreementMinScore"/>)
+    /// also has OCR confidence ≥ <see cref="ScanScoringOptions.HighZoneConfidenceMinScore"/>. Prevents a
+    /// trigram coincidence on a junk OCR read from promoting a scan to High.
+    /// </summary>
+    private bool HasConfidentContributingZone(PrintingZoneScores? zoneScores, CardZones zones)
+    {
+        if (_scoring.HighZoneConfidenceMinScore <= 0)
+        {
+            return true;
+        }
+
+        if (zoneScores is null)
+        {
+            return false;
+        }
+
+        var min = _scoring.HighZoneAgreementMinScore;
+        var conf = _scoring.HighZoneConfidenceMinScore;
+
+        return (zoneScores.NameScore >= min && zones.NameConfidence >= conf)
+            || (zoneScores.TypeLineScore >= min && zones.TypeLineConfidence >= conf)
+            || (zoneScores.RulesTextScore >= min && zones.RulesTextConfidence >= conf)
+            || (zoneScores.PowerToughnessScore >= min && zones.PowerToughnessConfidence >= conf)
+            || (zoneScores.BottomMetadataScore >= min && zones.BottomMetadataConfidence >= conf);
     }
 }

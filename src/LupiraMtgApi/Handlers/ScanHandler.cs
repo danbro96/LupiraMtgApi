@@ -90,6 +90,11 @@ public sealed class ScanHandler
                 RulesText = ctx.Zones.RulesText,
                 PowerToughness = ctx.Zones.PowerToughness,
                 BottomMetadata = ctx.Zones.BottomMetadata,
+                NameConfidence = ctx.Zones.NameConfidence,
+                TypeLineConfidence = ctx.Zones.TypeLineConfidence,
+                RulesTextConfidence = ctx.Zones.RulesTextConfidence,
+                PowerToughnessConfidence = ctx.Zones.PowerToughnessConfidence,
+                BottomMetadataConfidence = ctx.Zones.BottomMetadataConfidence,
             },
             SetSymbol = ctx.SymbolMatch is null ? null : new ScanSetSymbol
             {

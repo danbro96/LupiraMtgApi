@@ -26,8 +26,10 @@ public sealed class ZoneClassifyStep : IScanStep
         var preprocessed = ctx.Preprocessed
             ?? throw new InvalidOperationException("ZoneClassifyStep requires CropStep to have run first.");
 
-        var zones = preprocessed.Width > 0 && preprocessed.Height > 0
-            ? _classifier.Classify(ctx.Regions, preprocessed.Width, preprocessed.Height, preprocessed.IsCropped)
+        var (w, h) = ScanHelpers.PickOcrDims(ctx.Regions, preprocessed.Width, preprocessed.Height, span);
+
+        var zones = w > 0 && h > 0
+            ? _classifier.Classify(ctx.Regions, w, h, preprocessed.IsCropped)
             : CardZones.Empty;
 
         span?.SetTag("zone.coverage_score", ScanHelpers.ZoneCoverageScore(zones));

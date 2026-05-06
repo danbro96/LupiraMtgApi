@@ -71,15 +71,15 @@ public sealed class FlorenceOcrService : IOcrService
         var regions = new List<OcrRegion>(raw.Length);
         foreach (var r in raw)
         {
-            if (r.Quad is null || r.Quad.Length != 8 || r.Box is null)
+            if (r.Box is null)
             {
-                continue;
+                continue;   // Box drives all downstream classification; Quad is decorative.
             }
 
             regions.Add(new OcrRegion
             {
                 Text = r.Text ?? string.Empty,
-                Quad = r.Quad,
+                Quad = r.Quad is { Length: 8 } ? r.Quad : null,
                 Box = new BoundingBox
                 {
                     XMin = r.Box.XMin,
@@ -92,7 +92,12 @@ public sealed class FlorenceOcrService : IOcrService
             });
         }
 
-        return new OcrRegions { Regions = regions };
+        return new OcrRegions
+        {
+            Regions = regions,
+            ImageWidth = result.Image?.Width ?? 0,
+            ImageHeight = result.Image?.Height ?? 0,
+        };
     }
 
     private sealed class FlorenceOcrRequest

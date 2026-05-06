@@ -36,6 +36,15 @@ public sealed class ScanScoringOptions
 
     public int HighZoneAgreementMinCount { get; set; } = 2;
 
+    /// <summary>
+    /// Minimum OCR confidence (mean per-token probability) required from the strongest
+    /// contributing zone before a scan can be classified as High. Guards against the
+    /// case where Florence returns plausible text from a misread region — the trigram
+    /// match might land on a real card but the underlying OCR is junk. Set to 0 to
+    /// disable the gate entirely.
+    /// </summary>
+    public double HighZoneConfidenceMinScore { get; set; } = 0.60;
+
     // Hamming-distance cutoff for the full-card pHash BK-tree. Wider than the art-pHash
     // cutoff because the full-card hash is more sensitive to lighting/foil/exposure
     // shifts on the frame; matching needs a bigger tolerance window. Empirically set to

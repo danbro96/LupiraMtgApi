@@ -76,8 +76,9 @@ public sealed class RotationRetryStep : IScanStep
             var altRegions = altOcrTask.Result;
             var altSymbol = altSymbolTask.Result;
 
-            var altZones = preprocessed.Width > 0 && preprocessed.Height > 0
-                ? _classifier.Classify(altRegions, preprocessed.Width, preprocessed.Height, preprocessed.IsCropped)
+            var (altW, altH) = ScanHelpers.PickOcrDims(altRegions, preprocessed.Width, preprocessed.Height, retrySpan);
+            var altZones = altW > 0 && altH > 0
+                ? _classifier.Classify(altRegions, altW, altH, preprocessed.IsCropped)
                 : CardZones.Empty;
 
             var altCoverage = ScanHelpers.ZoneCoverageScore(altZones);
@@ -137,6 +138,8 @@ public sealed class RotationRetryStep : IScanStep
         }
     }
 
+    private const double RotationConfidenceFloor = 0.4;
+
     private static bool IsTextUpsideDown(OcrRegions regions, System.Diagnostics.Activity? rootSpan)
     {
         if (regions.Regions.Count == 0)
@@ -145,16 +148,38 @@ public sealed class RotationRetryStep : IScanStep
             return false;
         }
 
-        var rotations = regions.Regions
-            .Select(r => r.Rotation)
-            .OrderBy(r => r)
+        // Drop low-confidence regions: a misread fragment in the corner of the frame
+        // can carry an arbitrary rotation that pollutes the median. Then weight by
+        // bounding-box area so the card's title and rules text dominate over short
+        // tokens in the bottom strip — those are usually upright even when the card
+        // is rotated, because Florence per-region rotation flips with the text glyph.
+        var candidates = regions.Regions
+            .Where(r => r.Confidence >= RotationConfidenceFloor && r.Box.Area > 0)
+            .Select(r => (Rotation: r.Rotation, Weight: r.Box.Area))
+            .OrderBy(x => x.Rotation)
             .ToArray();
 
-        var median = rotations.Length % 2 == 1
-            ? rotations[rotations.Length / 2]
-            : (rotations[(rotations.Length / 2) - 1] + rotations[rotations.Length / 2]) / 2.0;
+        if (candidates.Length == 0)
+        {
+            return false;
+        }
 
-        rootSpan?.SetTag("rotation.median_degrees", median);
-        return Math.Abs(median) > 135.0;
+        var totalWeight = candidates.Sum(x => x.Weight);
+        var halfWeight = totalWeight / 2.0;
+        var cumulative = 0.0;
+        var weightedMedian = candidates[^1].Rotation;
+        foreach (var (rotation, weight) in candidates)
+        {
+            cumulative += weight;
+            if (cumulative >= halfWeight)
+            {
+                weightedMedian = rotation;
+                break;
+            }
+        }
+
+        rootSpan?.SetTag("rotation.median_degrees", weightedMedian);
+        rootSpan?.SetTag("rotation.median_sample_count", candidates.Length);
+        return Math.Abs(weightedMedian) > 135.0;
     }
 }
