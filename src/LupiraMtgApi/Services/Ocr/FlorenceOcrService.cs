@@ -67,23 +67,28 @@ public sealed class FlorenceOcrService : IOcrService
         var result = await response.Content.ReadFromJsonAsync<FlorenceOcrRegionsResult>(SerializerOptions, ct)
             ?? throw new InvalidOperationException("FlorenceApi /ocr/regions returned null body.");
 
-        var labels = result.Labels ?? Array.Empty<string>();
-        var quads = result.QuadBoxes ?? Array.Empty<double[]>();
-        var count = Math.Min(labels.Length, quads.Length);
-
-        var regions = new List<OcrRegion>(count);
-        for (var i = 0; i < count; i++)
+        var raw = result.Regions ?? Array.Empty<FlorenceOcrRegion>();
+        var regions = new List<OcrRegion>(raw.Length);
+        foreach (var r in raw)
         {
-            var quad = quads[i];
-            if (quad is null || quad.Length != 8)
+            if (r.Quad is null || r.Quad.Length != 8 || r.Box is null)
             {
                 continue;
             }
 
             regions.Add(new OcrRegion
             {
-                Text = labels[i] ?? string.Empty,
-                QuadBox = quad,
+                Text = r.Text ?? string.Empty,
+                Quad = r.Quad,
+                Box = new BoundingBox
+                {
+                    XMin = r.Box.XMin,
+                    YMin = r.Box.YMin,
+                    XMax = r.Box.XMax,
+                    YMax = r.Box.YMax,
+                },
+                Rotation = r.Rotation,
+                Confidence = r.Confidence,
             });
         }
 
@@ -104,8 +109,39 @@ public sealed class FlorenceOcrService : IOcrService
 
     private sealed class FlorenceOcrRegionsResult
     {
-        public double[][]? QuadBoxes { get; set; }
+        public FlorenceOcrRegion[]? Regions { get; set; }
 
-        public string[]? Labels { get; set; }
+        public FlorenceImageSize? Image { get; set; }
+    }
+
+    private sealed class FlorenceOcrRegion
+    {
+        public string? Text { get; set; }
+
+        public double[]? Quad { get; set; }
+
+        public FlorenceBox? Box { get; set; }
+
+        public double Rotation { get; set; }
+
+        public double Confidence { get; set; }
+    }
+
+    private sealed class FlorenceBox
+    {
+        public double XMin { get; set; }
+
+        public double YMin { get; set; }
+
+        public double XMax { get; set; }
+
+        public double YMax { get; set; }
+    }
+
+    private sealed class FlorenceImageSize
+    {
+        public int Width { get; set; }
+
+        public int Height { get; set; }
     }
 }

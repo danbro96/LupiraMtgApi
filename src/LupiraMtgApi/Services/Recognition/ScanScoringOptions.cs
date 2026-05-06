@@ -52,16 +52,14 @@ public sealed class ScanScoringOptions
 
     public int PHashMaxHamming { get; set; } = 12;
 
-    /// <summary>If the cropper rotated to portrait but the first pass populates fewer than this many zones, run the 180° rotation retry.</summary>
-    public int RotationRetryCoverageThreshold { get; set; } = 3;
-
-    /// <summary>Skip the retry entirely when the first pass populates this many zones — it almost never wins from this state.</summary>
-    public int RotationRetryHighCoverageSkipThreshold { get; set; } = 4;
-
-    /// <summary>Per-zone score floor counting toward "strong agreement" on the borderline retry-skip path.</summary>
-    public double RotationRetryStrongZoneScoreThreshold { get; set; } = 0.7;
-
-    public int RotationRetryStrongZoneMinCount { get; set; } = 3;
+    /// <summary>
+    /// Smoothing floor applied when blending OCR per-region confidence into zone aggregation:
+    /// the effective zone weight is <c>BaseWeight * (Floor + (1 - Floor) * ZoneConfidence)</c>,
+    /// so a zone with <c>Confidence = 0</c> still contributes <c>Floor</c> of its base weight
+    /// rather than vanishing. Keeps noisy reads from being silently dropped while still letting
+    /// confident reads outweigh them.
+    /// </summary>
+    public double OcrConfidenceFloor { get; set; } = 0.5;
 
     /// <summary>Used when a printing's set has no matching set_type_weights row. Neutral midpoint.</summary>
     public double DefaultSetTypeWeight { get; set; } = 0.5;

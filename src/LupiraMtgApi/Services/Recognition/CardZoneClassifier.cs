@@ -35,13 +35,16 @@ public sealed class CardZoneClassifier
             return CardZones.Empty;
         }
 
+        // FlorenceApi already returns regions in reading order (top-to-bottom, left-to-right)
+        // and provides axis-aligned Box per region. We preserve that order here so within-zone
+        // text concatenation reads naturally without a client-side resort.
         var raw = regions.Regions
             .Select(r => new
             {
                 Region = r,
-                RawCx = Centroid(r.QuadBox, isX: true) / imageWidth,
-                RawCy = Centroid(r.QuadBox, isX: false) / imageHeight,
-                AreaNormalized = QuadArea(r.QuadBox) / (imageWidth * (double) imageHeight),
+                RawCx = r.Box.CenterX / imageWidth,
+                RawCy = r.Box.CenterY / imageHeight,
+                AreaNormalized = r.Box.Area / (imageWidth * (double) imageHeight),
             })
             .ToList();
 
@@ -162,6 +165,11 @@ public sealed class CardZoneClassifier
             RulesText = JoinReadingOrder(buckets, CardZone.RulesText),
             PowerToughness = JoinReadingOrder(buckets, CardZone.PowerToughness),
             BottomMetadata = JoinReadingOrder(buckets, CardZone.BottomMetadata),
+            NameConfidence = MeanConfidence(buckets, CardZone.Name),
+            TypeLineConfidence = MeanConfidence(buckets, CardZone.TypeLine),
+            RulesTextConfidence = MeanConfidence(buckets, CardZone.RulesText),
+            PowerToughnessConfidence = MeanConfidence(buckets, CardZone.PowerToughness),
+            BottomMetadataConfidence = MeanConfidence(buckets, CardZone.BottomMetadata),
         };
     }
 
@@ -172,15 +180,36 @@ public sealed class CardZoneClassifier
             return string.Empty;
         }
 
-        // Reading order: rows top-to-bottom, then left-to-right within each row. Two regions
-        // are in the same row if their y-centroids differ by < 1.5% of image height.
+        // FlorenceApi's reading-order sort upstream means iteration order is already
+        // top-to-bottom, left-to-right within the zone subset.
         var sorted = list
-            .OrderBy(r => Math.Round(r.Cy * 64))
-            .ThenBy(r => r.Cx)
             .Select(r => r.Region.Text.Trim())
             .Where(t => !string.IsNullOrEmpty(t));
 
         return string.Join(' ', sorted);
+    }
+
+    private static double MeanConfidence(Dictionary<CardZone, List<RankedRegion>> buckets, CardZone zone)
+    {
+        if (!buckets.TryGetValue(zone, out var list) || list.Count == 0)
+        {
+            return 0.0;
+        }
+
+        var sum = 0.0;
+        var n = 0;
+        foreach (var r in list)
+        {
+            if (string.IsNullOrEmpty(r.Region.Text.Trim()))
+            {
+                continue;
+            }
+
+            sum += r.Region.Confidence;
+            n++;
+        }
+
+        return n == 0 ? 0.0 : sum / n;
     }
 
     private static CardZone ZoneForCropped(double cx, double cy)
@@ -219,27 +248,6 @@ public sealed class CardZoneClassifier
     {
         var t = text.Trim();
         return t.Length is > 0 and <= 8;
-    }
-
-    private static double Centroid(double[] quad, bool isX)
-    {
-        // QuadBox is x1,y1,x2,y2,x3,y3,x4,y4. Mean of the 4 vertices on the requested axis.
-        var start = isX ? 0 : 1;
-        return (quad[start] + quad[start + 2] + quad[start + 4] + quad[start + 6]) / 4.0;
-    }
-
-    private static double QuadArea(double[] quad)
-    {
-        // Shoelace formula for the polygon (x1,y1)..(x4,y4).
-        var sum = 0.0;
-        for (var i = 0; i < 4; i++)
-        {
-            var j = (i + 1) % 4;
-            sum += quad[i * 2] * quad[(j * 2) + 1];
-            sum -= quad[(j * 2)] * quad[(i * 2) + 1];
-        }
-
-        return Math.Abs(sum) / 2.0;
     }
 
     private sealed record RankedRegion(OcrRegion Region, double Cx, double Cy, double AreaNormalized);

@@ -12,6 +12,17 @@ public sealed class CardZones
 
     public required string BottomMetadata { get; set; }
 
+    /// <summary>Mean OCR confidence of the region(s) classified into <see cref="Name"/>; 0 when empty.</summary>
+    public double NameConfidence { get; set; }
+
+    public double TypeLineConfidence { get; set; }
+
+    public double RulesTextConfidence { get; set; }
+
+    public double PowerToughnessConfidence { get; set; }
+
+    public double BottomMetadataConfidence { get; set; }
+
     public static CardZones Empty { get; } = new()
     {
         Name = string.Empty,

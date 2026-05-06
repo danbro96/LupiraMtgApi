@@ -408,30 +408,32 @@ public sealed class CardZoneScorer
             return 0.0;
         }
 
+        // Weights are already confidence-smoothed in WeightsForPresentZones; here we
+        // just normalize across the present zones so the aggregate stays in [0,1].
         var sum = 0.0;
         if (weights.NamePresent)
         {
-            sum += (_options.NameWeight / weights.TotalPresent) * scores.NameScore;
+            sum += (weights.NameWeight / weights.TotalPresent) * scores.NameScore;
         }
 
         if (weights.TypeLinePresent)
         {
-            sum += (_options.TypeLineWeight / weights.TotalPresent) * scores.TypeLineScore;
+            sum += (weights.TypeLineWeight / weights.TotalPresent) * scores.TypeLineScore;
         }
 
         if (weights.RulesTextPresent)
         {
-            sum += (_options.RulesTextWeight / weights.TotalPresent) * scores.RulesTextScore;
+            sum += (weights.RulesTextWeight / weights.TotalPresent) * scores.RulesTextScore;
         }
 
         if (weights.PowerToughnessPresent)
         {
-            sum += (_options.PowerToughnessWeight / weights.TotalPresent) * scores.PowerToughnessScore;
+            sum += (weights.PowerToughnessWeight / weights.TotalPresent) * scores.PowerToughnessScore;
         }
 
         if (weights.BottomMetadataPresent)
         {
-            sum += (_options.BottomMetadataWeight / weights.TotalPresent) * scores.BottomMetadataScore;
+            sum += (weights.BottomMetadataWeight / weights.TotalPresent) * scores.BottomMetadataScore;
         }
 
         return Math.Clamp(sum, 0.0, 1.0);
@@ -439,6 +441,8 @@ public sealed class CardZoneScorer
 
     private ZoneWeights WeightsForPresentZones(CardZones zones)
     {
+        var floor = Math.Clamp(_options.OcrConfidenceFloor, 0.0, 1.0);
+
         var w = new ZoneWeights
         {
             NamePresent = !string.IsNullOrWhiteSpace(zones.Name),
@@ -448,34 +452,23 @@ public sealed class CardZoneScorer
             BottomMetadataPresent = !string.IsNullOrWhiteSpace(zones.BottomMetadata) && CollectorRegex.IsMatch(zones.BottomMetadata),
         };
 
-        var total = 0.0;
-        if (w.NamePresent)
-        {
-            total += _options.NameWeight;
-        }
+        // Smooth zone weights by per-zone OCR confidence: effective = base * (floor + (1-floor)*confidence).
+        // Confident reads keep their full base weight; noisy reads still contribute (down to `floor`)
+        // because trigram match can recover the right card even from garbled text.
+        w.NameWeight = w.NamePresent ? _options.NameWeight * Smooth(zones.NameConfidence, floor) : 0.0;
+        w.TypeLineWeight = w.TypeLinePresent ? _options.TypeLineWeight * Smooth(zones.TypeLineConfidence, floor) : 0.0;
+        w.RulesTextWeight = w.RulesTextPresent ? _options.RulesTextWeight * Smooth(zones.RulesTextConfidence, floor) : 0.0;
+        w.PowerToughnessWeight = w.PowerToughnessPresent ? _options.PowerToughnessWeight * Smooth(zones.PowerToughnessConfidence, floor) : 0.0;
+        w.BottomMetadataWeight = w.BottomMetadataPresent ? _options.BottomMetadataWeight * Smooth(zones.BottomMetadataConfidence, floor) : 0.0;
 
-        if (w.TypeLinePresent)
-        {
-            total += _options.TypeLineWeight;
-        }
-
-        if (w.RulesTextPresent)
-        {
-            total += _options.RulesTextWeight;
-        }
-
-        if (w.PowerToughnessPresent)
-        {
-            total += _options.PowerToughnessWeight;
-        }
-
-        if (w.BottomMetadataPresent)
-        {
-            total += _options.BottomMetadataWeight;
-        }
-
-        w.TotalPresent = total;
+        w.TotalPresent = w.NameWeight + w.TypeLineWeight + w.RulesTextWeight + w.PowerToughnessWeight + w.BottomMetadataWeight;
         return w;
+    }
+
+    private static double Smooth(double confidence, double floor)
+    {
+        var c = Math.Clamp(confidence, 0.0, 1.0);
+        return floor + ((1.0 - floor) * c);
     }
 
     private static PrintingZoneScores GetOrAdd(Dictionary<string, PrintingZoneScores> byPrinting, string id)

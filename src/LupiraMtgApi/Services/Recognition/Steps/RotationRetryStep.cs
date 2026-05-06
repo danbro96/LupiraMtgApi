@@ -2,16 +2,17 @@ using LupiraMtgApi.Services.Imaging;
 using LupiraMtgApi.Services.Ocr;
 using LupiraMtgApi.Services.Recognition.Pipeline;
 using LupiraMtgApi.Services.SetSymbol;
-using Microsoft.Extensions.Options;
 
 namespace LupiraMtgApi.Services.Recognition.Steps;
 
 /// <summary>
-/// When the cropper rotated 90° CW from a landscape original AND the first pass
-/// produced sparse zones, flip 180° and retry OCR + pHash + symbol detection. If the
-/// alt rotation populates more zones, replace the context with the alt outputs and
-/// re-score. No-op when not rotated or first pass is already confident — short-circuit
-/// saves ~1s per confident scan, validated in production traces.
+/// When the cropper rotated 90° from a landscape original, FlorenceApi's per-region
+/// rotation tells us whether the resulting portrait is right-side up. If the median
+/// region rotation lands in [135°,180°]∪[-180°,-135°] the text is upside-down and the
+/// CW pick was wrong — flip 180° and re-run OCR + pHash + symbol detection. The
+/// rotation signal replaced the earlier "low coverage = retry" heuristic, which paid a
+/// full extra OCR pass on every borderline scan; we now skip the retry entirely when
+/// the text reads upright.
 /// </summary>
 public sealed class RotationRetryStep : IScanStep
 {
@@ -20,7 +21,6 @@ public sealed class RotationRetryStep : IScanStep
     private readonly SetSymbolDetector _symbolDetector;
     private readonly CardZoneClassifier _classifier;
     private readonly CardZoneScorer _scorer;
-    private readonly ScanScoringOptions _scoring;
     private readonly ILogger<RotationRetryStep> _logger;
 
     public RotationRetryStep(
@@ -29,7 +29,6 @@ public sealed class RotationRetryStep : IScanStep
         SetSymbolDetector symbolDetector,
         CardZoneClassifier classifier,
         CardZoneScorer scorer,
-        IOptions<ScanScoringOptions> scoring,
         ILogger<RotationRetryStep> logger)
     {
         _pHash = pHash;
@@ -37,7 +36,6 @@ public sealed class RotationRetryStep : IScanStep
         _symbolDetector = symbolDetector;
         _classifier = classifier;
         _scorer = scorer;
-        _scoring = scoring.Value;
         _logger = logger;
     }
 
@@ -47,7 +45,7 @@ public sealed class RotationRetryStep : IScanStep
     {
         var preprocessed = ctx.Preprocessed
             ?? throw new InvalidOperationException("RotationRetryStep requires CropStep to have run first.");
-        var scoring = ctx.ZoneScoring
+        _ = ctx.ZoneScoring
             ?? throw new InvalidOperationException("RotationRetryStep requires ZoneScoreStep to have run first.");
 
         if (!preprocessed.Rotated)
@@ -55,13 +53,9 @@ public sealed class RotationRetryStep : IScanStep
             return ctx;   // not rotated → no rotation ambiguity to resolve
         }
 
-        if (IsFirstPassConfident(ctx.Zones, scoring, ctx.RootSpan))
+        if (!IsTextUpsideDown(ctx.Regions, ctx.RootSpan))
         {
-            // Tag the skip reason on the root span for telemetry.
-            var skipReason = ScanHelpers.ZoneCoverageScore(ctx.Zones) >= _scoring.RotationRetryHighCoverageSkipThreshold
-                ? "high_coverage"
-                : "strong_zone_agreement";
-            ctx.RootSpan?.SetTag("rotation.skipped_reason", skipReason);
+            ctx.RootSpan?.SetTag("rotation.skipped_reason", "text_upright");
             return ctx;
         }
 
@@ -93,11 +87,13 @@ public sealed class RotationRetryStep : IScanStep
             var ocrLatencyMs = ctx.OcrLatencyMs;
             var pHashLatencyMs = ctx.PHashLatencyMs + altPHash.LatencyMs;
 
-            if (altCoverage > ScanHelpers.ZoneCoverageScore(ctx.Zones))
+            // Coverage is the tie-breaker: rotation said the original was upside-down, but if
+            // the flipped pass somehow extracts strictly less text we keep the original to
+            // protect against a Florence rotation misread.
+            if (altCoverage >= ScanHelpers.ZoneCoverageScore(ctx.Zones))
             {
                 retrySpan?.SetTag("rotation.alt_won", true);
 
-                // Re-score on the winning rotation.
                 using var rescoreSpan = ScanTelemetry.Source.StartActivity("zone.score.rescore");
                 var altScoring = await _scorer.ScoreAsync(altZones, altSymbol, ct);
                 rescoreSpan?.SetTag("zone.candidate_count", altScoring.ByPrinting.Count);
@@ -141,30 +137,24 @@ public sealed class RotationRetryStep : IScanStep
         }
     }
 
-    private bool IsFirstPassConfident(CardZones zones, CardZoneScoringResult scoring, System.Diagnostics.Activity? rootSpan)
+    private static bool IsTextUpsideDown(OcrRegions regions, System.Diagnostics.Activity? rootSpan)
     {
-        var coverage = ScanHelpers.ZoneCoverageScore(zones);
-        if (coverage >= _scoring.RotationRetryHighCoverageSkipThreshold)
+        if (regions.Regions.Count == 0)
         {
-            rootSpan?.SetTag("rotation.first_pass_confidence", "high_coverage");
-            return true;
-        }
-
-        if (coverage < _scoring.RotationRetryCoverageThreshold)
-        {
+            // No OCR signal to disambiguate orientation; let the first pass stand.
             return false;
         }
 
-        var topRow = scoring.ByPrinting.Values
-            .OrderByDescending(r => r.AggregateScore)
-            .FirstOrDefault();
-        if (topRow is not null
-            && topRow.ContributingZoneCount(_scoring.RotationRetryStrongZoneScoreThreshold) >= _scoring.RotationRetryStrongZoneMinCount)
-        {
-            rootSpan?.SetTag("rotation.first_pass_confidence", "strong_zone_agreement");
-            return true;
-        }
+        var rotations = regions.Regions
+            .Select(r => r.Rotation)
+            .OrderBy(r => r)
+            .ToArray();
 
-        return false;
+        var median = rotations.Length % 2 == 1
+            ? rotations[rotations.Length / 2]
+            : (rotations[(rotations.Length / 2) - 1] + rotations[rotations.Length / 2]) / 2.0;
+
+        rootSpan?.SetTag("rotation.median_degrees", median);
+        return Math.Abs(median) > 135.0;
     }
 }
