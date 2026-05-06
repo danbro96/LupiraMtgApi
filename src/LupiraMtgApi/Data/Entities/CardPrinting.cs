@@ -22,6 +22,13 @@ public sealed class CardPrinting
 
     public long? ArtPHash { get; set; }
 
+    // Perceptual hash of the full card image (Scryfall image_uris.normal). Captures
+    // frame + name + art + text together — strictly more information than ArtPHash but
+    // more sensitive to lighting/foil. Loaded into a separate BK-tree alongside
+    // ArtPHash; the scan path searches both and takes whichever rotation/index gives
+    // the lower hamming distance per candidate printing.
+    public long? FullCardPHash { get; set; }
+
     public Dictionary<string, decimal>? Prices { get; set; }
 
     public DateTimeOffset SyncedAt { get; set; }

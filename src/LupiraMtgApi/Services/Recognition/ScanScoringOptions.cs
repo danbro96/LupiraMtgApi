@@ -35,4 +35,10 @@ public sealed class ScanScoringOptions
     public double HighZoneAgreementMinScore { get; set; } = 0.70;
 
     public int HighZoneAgreementMinCount { get; set; } = 2;
+
+    // Hamming-distance cutoff for the full-card pHash BK-tree. Wider than the art-pHash
+    // cutoff because the full-card hash is more sensitive to lighting/foil/exposure
+    // shifts on the frame; matching needs a bigger tolerance window. Empirically set to
+    // 16 in initial deploy; tune from telemetry on the `phash.full_best_hamming` span tag.
+    public int FullCardPHashMaxHamming { get; set; } = 16;
 }

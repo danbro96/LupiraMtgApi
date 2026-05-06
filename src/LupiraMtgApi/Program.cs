@@ -66,6 +66,7 @@ builder.Services.Configure<ScanScoringOptions>(builder.Configuration.GetSection(
 builder.Services.AddSingleton<IImageStore, MinioImageStore>();
 builder.Services.AddSingleton<PHashService>();
 builder.Services.AddSingleton<PHashIndex>();
+builder.Services.AddSingleton<FullCardPHashIndex>();
 builder.Services.AddSingleton<CardCropService>();
 builder.Services.AddSingleton<CardZoneClassifier>();
 builder.Services.AddSingleton<SetSymbolRasterizer>();
@@ -97,6 +98,7 @@ builder.Services.AddHttpClient<IOcrService, FlorenceOcrService>((sp, client) =>
 builder.Services.AddSingleton<ScryfallSyncRunner>();
 builder.Services.AddHostedService<ScryfallSyncJob>();
 builder.Services.AddHostedService<PHashIndexBootstrapper>();
+builder.Services.AddHostedService<FullCardPHashIndexBootstrapper>();
 builder.Services.AddHostedService<SetSymbolIndexBootstrapper>();
 
 builder.Services.AddScoped<CardPrintingMapper>();

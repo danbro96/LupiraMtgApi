@@ -70,6 +70,7 @@ public sealed class ScryfallSyncRunner
 
             var symbolRasterizer = scope.ServiceProvider.GetRequiredService<SetSymbolRasterizer>();
             var symbolIndex = scope.ServiceProvider.GetRequiredService<SetSymbolIndex>();
+            var fullCardPHashIndex = scope.ServiceProvider.GetRequiredService<FullCardPHashIndex>();
 
             await images.EnsureBucketAsync(ct);
 
@@ -148,6 +149,23 @@ public sealed class ScryfallSyncRunner
                 catch (Exception rebuildEx)
                 {
                     _logger.LogWarning(rebuildEx, "SetSymbolIndex rebuild after sync failed; set-symbol detection will use the previous index until next sync");
+                    rebuildSpan?.SetTag("error.type", rebuildEx.GetType().Name);
+                }
+            }
+
+            using (var rebuildSpan = SyncActivity.StartActivity("scryfall.sync.full_card_phash_index_rebuild"))
+            {
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    await fullCardPHashIndex.RebuildAsync(ct);
+                    sw.Stop();
+                    IndexRebuildHist.Record(sw.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("index", "full_card_phash"));
+                    _logger.LogInformation("FullCardPHashIndex rebuilt in {Duration}ms", sw.Elapsed.TotalMilliseconds);
+                }
+                catch (Exception rebuildEx)
+                {
+                    _logger.LogWarning(rebuildEx, "FullCardPHashIndex rebuild after sync failed; full-card pHash signal will use the previous index until next sync");
                     rebuildSpan?.SetTag("error.type", rebuildEx.GetType().Name);
                 }
             }
@@ -338,15 +356,44 @@ public sealed class ScryfallSyncRunner
 
             if (_options.DownloadImages && entity.ImageObjectKey is null && dto.ImageUris?.Normal is { Length: > 0 })
             {
-                await UploadImageAsync(
-                    images,
-                    source,
-                    dto.ImageUris.Normal,
-                    NormalKey(dto.Id),
-                    "image/jpeg",
-                    ct);
+                // Buffer the bytes so we can both upload AND compute FullCardPHash from the
+                // same in-memory copy — same pattern as the ArtCrop block below. ~80-150KB
+                // per printing × batch size of memory pressure during sync. Acceptable.
+                await using var normalStream = await source.DownloadImageAsync(dto.ImageUris.Normal, ct);
+                using var ms = new MemoryStream();
+                await normalStream.CopyToAsync(ms, ct);
+                ms.Position = 0;
+                await images.PutAsync(NormalKey(dto.Id), ms, "image/jpeg", ct);
                 entity.ImageObjectKey = NormalKey(dto.Id);
                 report.ImagesUploaded++;
+
+                if (_options.ComputePHashes && entity.FullCardPHash is null)
+                {
+                    ms.Position = 0;
+                    entity.FullCardPHash = await pHash.ComputeAsync(ms, ct);
+                    report.PHashesComputed++;
+                }
+            }
+            else if (_options.ComputePHashes && entity.FullCardPHash is null && entity.ImageObjectKey is not null)
+            {
+                // Backfill path: image already in MinIO from a previous sync but the
+                // FullCardPHash column was added in a later migration. Read from MinIO
+                // instead of re-downloading from Scryfall — saves ~80K HTTP requests on
+                // the first re-sync after deploying this feature. Best-effort: a MinIO
+                // miss leaves FullCardPHash null and the next sync retries.
+                try
+                {
+                    await using var stored = await images.GetAsync(entity.ImageObjectKey, ct);
+                    using var backfill = new MemoryStream();
+                    await stored.CopyToAsync(backfill, ct);
+                    backfill.Position = 0;
+                    entity.FullCardPHash = await pHash.ComputeAsync(backfill, ct);
+                    report.PHashesComputed++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "FullCardPHash backfill failed for {PrintingId}; will retry on next sync", dto.Id);
+                }
             }
 
             if (_options.DownloadImages && entity.ImageArtCropKey is null && dto.ImageUris?.ArtCrop is { Length: > 0 })

@@ -36,7 +36,9 @@ public sealed class ScanHandler
     private static readonly Histogram<double> OcrDurationHist = ScanMeter.CreateHistogram<double>("scan.ocr.duration_ms", unit: "ms", description: "OCR latency including any rotation-retry pass");
     private static readonly Histogram<double> PhashDurationHist = ScanMeter.CreateHistogram<double>("scan.phash.duration_ms", unit: "ms", description: "pHash compute + index search latency");
     private static readonly Histogram<int> OcrRegionHist = ScanMeter.CreateHistogram<int>("scan.ocr.region_count", description: "Number of OCR regions returned by Florence");
-    private static readonly Histogram<int> PhashCandidateHist = ScanMeter.CreateHistogram<int>("scan.phash.candidate_count", description: "BK-tree candidates within the hamming cutoff");
+    private static readonly Histogram<int> PhashCandidateHist = ScanMeter.CreateHistogram<int>("scan.phash.candidate_count", description: "BK-tree candidates within the hamming cutoff (merged art + full-card)");
+    private static readonly Histogram<int> FullPhashCandidateHist = ScanMeter.CreateHistogram<int>("scan.phash.full.candidate_count", description: "Full-card BK-tree hits within the hamming cutoff");
+    private static readonly Counter<long> WinningSourceCounter = ScanMeter.CreateCounter<long>("scan.phash.winning_source.total", description: "pHash signal carrying the top match: art / full / both / neither");
     private static readonly Histogram<int> ZoneCoverageHist = ScanMeter.CreateHistogram<int>("scan.zone.coverage", description: "Number of zones with meaningful content (0..5)");
     private static readonly Histogram<double> TopCombinedHist = ScanMeter.CreateHistogram<double>("scan.top.combined_score", description: "Final combined score of the top candidate");
     private static readonly Counter<long> ConfidenceCounter = ScanMeter.CreateCounter<long>("scan.confidence.total", description: "Scans by confidence outcome");
@@ -57,6 +59,14 @@ public sealed class ScanHandler
     // creatures naturally hit 3+ when correctly oriented.
     private const int RotationRetryCoverageThreshold = 3;
 
+    // Skip the retry entirely when the first pass already looks strong. Two ways: very
+    // high coverage (4-5 zones) OR borderline coverage (3) with multi-zone agreement on
+    // the top candidate. Keeps the retry from costing ~1s on confident scans where the
+    // alt rotation would not win anyway.
+    private const int RotationRetryHighCoverageSkipThreshold = 4;
+    private const double RotationRetryStrongZoneScoreThreshold = 0.7;
+    private const int RotationRetryStrongZoneMinCount = 3;
+
     // Used when a printing's set has no matching set_type_weights row (defensive
     // against new Scryfall set_types we haven't seeded). Neutral midpoint so an
     // unknown set still ranks plausibly.
@@ -66,6 +76,7 @@ public sealed class ScanHandler
     private readonly Marten.IDocumentSession _session;
     private readonly IImageStore _images;
     private readonly PHashIndex _pHashIndex;
+    private readonly FullCardPHashIndex _fullCardPHashIndex;
     private readonly PHashService _pHash;
     private readonly IOcrService _ocr;
     private readonly CardCropService _crop;
@@ -81,6 +92,7 @@ public sealed class ScanHandler
         Marten.IDocumentSession session,
         IImageStore images,
         PHashIndex pHashIndex,
+        FullCardPHashIndex fullCardPHashIndex,
         PHashService pHash,
         IOcrService ocr,
         CardCropService crop,
@@ -95,6 +107,7 @@ public sealed class ScanHandler
         _session = session;
         _images = images;
         _pHashIndex = pHashIndex;
+        _fullCardPHashIndex = fullCardPHashIndex;
         _pHash = pHash;
         _ocr = ocr;
         _crop = crop;
@@ -183,7 +196,12 @@ public sealed class ScanHandler
             }
         }
 
-        var pHashTask = this.RunPHashAsync(preprocessed.Bytes, scanId);
+        // First-pass pHash tries both rotations when the cropper had to rotate — the CW
+        // default may be wrong, and pHash has no other recovery path (OCR has the
+        // rotation retry below to cover its own case). Cost: one extra ~110ms hash
+        // compute on rotated scans, and pHash actually starts producing hits where it
+        // was silently returning 0 before.
+        var pHashTask = this.RunPHashAsync(preprocessed.Bytes, scanId, tryAltRotation: preprocessed.Rotated);
         var ocrTask = this.RunOcrRegionsAsync(preprocessed.Bytes, preprocessed.MediaType, scanId, ct);
         var symbolTask = preprocessed.IsCropped
             ? this.RunSymbolDetectAsync(preprocessed.Bytes, preprocessed.MediaType, ct)
@@ -204,13 +222,25 @@ public sealed class ScanHandler
             zoneSpan?.SetTag("zone.coverage_score", ZoneCoverageScore(zones));
         }
 
+        // First-pass scoring runs before the retry decision so we can use multi-zone
+        // agreement as a "first pass is confident" signal. Production traces show the
+        // retry rarely wins from a confident first pass — running it costs ~1s for no
+        // gain. Re-scoring on retry-win is fine: the second call hits warm caches.
+        CardZoneScoringResult scoringResult;
+        using (var scoreSpan = ScanActivity.StartActivity("zone.score"))
+        {
+            scoringResult = await _zoneScorer.ScoreAsync(zones, symbolMatch, ct);
+            scoreSpan?.SetTag("zone.candidate_count", scoringResult.ByPrinting.Count);
+            scoreSpan?.SetTag("zone.weights_total", scoringResult.Weights.TotalPresent);
+        }
+
         // Two-pass OCR: when CardCropService had to rotate (landscape bbox → portrait),
         // it picked clockwise by default. If the first pass produced sparse zones the card
         // might be upside-down — flip 180° and retry. We pick whichever pass populated
         // more zones. pHash and symbol detection ride along so all three signals reflect
         // the same orientation.
         var rotationRetried = false;
-        if (preprocessed.Rotated && ZoneCoverageScore(zones) < RotationRetryCoverageThreshold)
+        if (preprocessed.Rotated && !IsFirstPassConfident(zones, scoringResult, rootSpan))
         {
             using var retrySpan = ScanActivity.StartActivity("rotation.retry");
             retrySpan?.SetTag("rotation.first_pass_score", ZoneCoverageScore(zones));
@@ -253,6 +283,12 @@ public sealed class ScanHandler
                         Height = preprocessed.Height,
                         Rotated = preprocessed.Rotated,
                     };
+
+                    // Re-score on the winning rotation so downstream candidates and
+                    // confidence reflect the alt-pass zones, not the first pass.
+                    using var rescoreSpan = ScanActivity.StartActivity("zone.score.rescore");
+                    scoringResult = await _zoneScorer.ScoreAsync(zones, symbolMatch, ct);
+                    rescoreSpan?.SetTag("zone.candidate_count", scoringResult.ByPrinting.Count);
                 }
 
                 retrySpan?.SetTag("rotation.alt_won", rotationRetried);
@@ -268,13 +304,13 @@ public sealed class ScanHandler
                 retrySpan?.SetTag("error.type", ex.GetType().Name);
             }
         }
-
-        CardZoneScoringResult scoringResult;
-        using (var scoreSpan = ScanActivity.StartActivity("zone.score"))
+        else if (preprocessed.Rotated)
         {
-            scoringResult = await _zoneScorer.ScoreAsync(zones, symbolMatch, ct);
-            scoreSpan?.SetTag("zone.candidate_count", scoringResult.ByPrinting.Count);
-            scoreSpan?.SetTag("zone.weights_total", scoringResult.Weights.TotalPresent);
+            // First pass was confident — skipped the retry. Tag for telemetry.
+            var skipReason = ZoneCoverageScore(zones) >= RotationRetryHighCoverageSkipThreshold
+                ? "high_coverage"
+                : "strong_zone_agreement";
+            rootSpan?.SetTag("rotation.skipped_reason", skipReason);
         }
 
         var byPrinting = new Dictionary<string, FinalRow>(StringComparer.Ordinal);
@@ -539,17 +575,19 @@ public sealed class ScanHandler
         return (ranked, hydratedRows);
     }
 
-    // Modern-frame art rectangle, in card-relative coords. Aspect 0.86×0.45 normalized
-    // by card aspect 0.72 = 1.37, matching Scryfall's art_crop. The BK-tree was built on
-    // hashes of Scryfall's art_crop bytes during sync, so the scan-side hash must come
-    // from the same rectangle of the photo — hashing the full card produces a signature
-    // dominated by frame + text, which has near-zero correlation with art-only hashes.
-    private const double ArtCropYMin = 0.10;
-    private const double ArtCropYMax = 0.555;
-    private const double ArtCropXMin = 0.07;
-    private const double ArtCropXMax = 0.93;
+    // Modern-frame art rectangle, in card-relative coords. Aspect ~0.90×0.495 normalized
+    // by card aspect 0.72 ≈ 1.45, close to Scryfall's art_crop (~1.37). The BK-tree was
+    // built on hashes of Scryfall's art_crop bytes during sync, so the scan-side hash
+    // must come from the same rectangle of the photo — hashing the full card produces
+    // a signature dominated by frame + text, which has near-zero correlation with
+    // art-only hashes. Rectangle is intentionally a bit looser than the strict art
+    // crop so small misalignment after rotation doesn't push the rectangle off the art.
+    private const double ArtCropYMin = 0.08;
+    private const double ArtCropYMax = 0.575;
+    private const double ArtCropXMin = 0.05;
+    private const double ArtCropXMax = 0.95;
 
-    private Task<(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)> RunPHashAsync(byte[] imageBytes, Guid scanId)
+    private Task<(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)> RunPHashAsync(byte[] imageBytes, Guid scanId, bool tryAltRotation = false)
     {
         // Capture the parent activity context so the Task.Run continuation parents its
         // span under the root scan span, not under the thread-pool worker's empty
@@ -558,38 +596,126 @@ public sealed class ScanHandler
         return Task.Run(() =>
         {
             using var span = ScanActivity.StartActivity("phash.compute", ActivityKind.Internal, parent?.Context ?? default);
-            if (!_pHashIndex.IsLoaded)
+            var artLoaded = _pHashIndex.IsLoaded;
+            var fullLoaded = _fullCardPHashIndex.IsLoaded;
+            if (!artLoaded && !fullLoaded)
             {
-                span?.SetTag("phash.index_loaded", false);
+                span?.SetTag("phash.art_index_loaded", false);
+                span?.SetTag("phash.full_index_loaded", false);
                 return ((long?) null, 0, (IReadOnlyList<PHashIndex.PHashHit>) Array.Empty<PHashIndex.PHashHit>());
             }
 
-            span?.SetTag("phash.index_loaded", true);
-            span?.SetTag("phash.index_size", _pHashIndex.Count);
+            span?.SetTag("phash.art_index_loaded", artLoaded);
+            span?.SetTag("phash.full_index_loaded", fullLoaded);
+            span?.SetTag("phash.art_index_size", _pHashIndex.Count);
+            span?.SetTag("phash.full_index_size", _fullCardPHashIndex.Count);
 
+            var fullCardHamming = _scoring.FullCardPHashMaxHamming;
             var sw = Stopwatch.StartNew();
-            long hash;
             try
             {
                 using var stream = new MemoryStream(imageBytes);
-                using var img = Image.Load<Rgba32>(stream);
+                using var fullImg = Image.Load<Rgba32>(stream);
 
-                var x = (int) Math.Round(img.Width * ArtCropXMin);
-                var y = (int) Math.Round(img.Height * ArtCropYMin);
-                var w = (int) Math.Round(img.Width * (ArtCropXMax - ArtCropXMin));
-                var h = (int) Math.Round(img.Height * (ArtCropYMax - ArtCropYMin));
+                // Full-card pHash uses the WHOLE cropped image — no rectangle extraction.
+                // Hash the full image first while we still have it intact, then re-clone
+                // the same source bytes for the art-crop branch so the two paths don't
+                // have to re-decode.
+                var (fullHash, fullHits, fullBest, fullRotation) = ComputeAndSearch(
+                    fullImg,
+                    tryAltRotation,
+                    h => _fullCardPHashIndex.Search(h, fullCardHamming).Take(PHashTopK).ToList());
 
-                // Sanity-check: a degenerate crop region means the input image is too
-                // small to extract a meaningful art region — fall back to hashing the
-                // whole image (nothing to lose vs. the previous behavior).
-                var artExtracted = w >= 32 && h >= 32 && x >= 0 && y >= 0 && x + w <= img.Width && y + h <= img.Height;
+                // Art-only pHash. Clone from the original buffer so we keep `fullImg`
+                // available as the post-rotation winning source if needed.
+                stream.Position = 0;
+                using var artImg = Image.Load<Rgba32>(stream);
+
+                var x = (int) Math.Round(artImg.Width * ArtCropXMin);
+                var y = (int) Math.Round(artImg.Height * ArtCropYMin);
+                var w = (int) Math.Round(artImg.Width * (ArtCropXMax - ArtCropXMin));
+                var h = (int) Math.Round(artImg.Height * (ArtCropYMax - ArtCropYMin));
+                var artExtracted = w >= 32 && h >= 32 && x >= 0 && y >= 0 && x + w <= artImg.Width && y + h <= artImg.Height;
                 if (artExtracted)
                 {
-                    img.Mutate(ctx => ctx.Crop(new Rectangle(x, y, w, h)));
+                    artImg.Mutate(ctx => ctx.Crop(new Rectangle(x, y, w, h)));
                 }
 
                 span?.SetTag("phash.art_extracted", artExtracted);
-                hash = _pHash.Compute(img);
+
+                var (artHash, artHits, artBest, artRotation) = ComputeAndSearch(
+                    artImg,
+                    tryAltRotation,
+                    hh => _pHashIndex.Search(hh, PHashMaxHamming).Take(PHashTopK).ToList());
+
+                // Merge: per-printing minimum hamming across both indexes. A printing
+                // appearing in both gets the smaller of the two distances; this is what
+                // makes the two signals compensate for each other (foil cards lose
+                // full-card quality but keep art; misaligned art rectangle loses art
+                // quality but keeps full-card).
+                var merged = new Dictionary<string, int>(StringComparer.Ordinal);
+                foreach (var hit in artHits)
+                {
+                    merged[hit.PrintingId] = hit.Distance;
+                }
+
+                foreach (var hit in fullHits)
+                {
+                    if (merged.TryGetValue(hit.PrintingId, out var existing))
+                    {
+                        if (hit.Distance < existing)
+                        {
+                            merged[hit.PrintingId] = hit.Distance;
+                        }
+                    }
+                    else
+                    {
+                        merged[hit.PrintingId] = hit.Distance;
+                    }
+                }
+
+                var hits = merged
+                    .Select(kvp => new PHashIndex.PHashHit(kvp.Key, kvp.Value))
+                    .OrderBy(h => h.Distance)
+                    .Take(PHashTopK)
+                    .ToList();
+
+                // Determine which signal carried the top match for telemetry. "both"
+                // means the same printing appeared in both indexes (independent
+                // confirmation); "art" / "full" means only one side had it.
+                var winningSource = "neither";
+                if (hits.Count > 0)
+                {
+                    var topId = hits[0].PrintingId;
+                    var inArt = artHits.Any(h => h.PrintingId == topId);
+                    var inFull = fullHits.Any(h => h.PrintingId == topId);
+                    winningSource = (inArt, inFull) switch
+                    {
+                        (true, true) => "both",
+                        (true, false) => "art",
+                        (false, true) => "full",
+                        _ => "neither",
+                    };
+                }
+
+                span?.SetTag("phash.art_hit_count", artHits.Count);
+                span?.SetTag("phash.art_best_hamming", artHits.Count > 0 ? artHits[0].Distance : -1);
+                span?.SetTag("phash.art_winning_rotation", artRotation);
+                span?.SetTag("phash.art_hash", artHash);
+                span?.SetTag("phash.full_hit_count", fullHits.Count);
+                span?.SetTag("phash.full_best_hamming", fullHits.Count > 0 ? fullHits[0].Distance : -1);
+                span?.SetTag("phash.full_winning_rotation", fullRotation);
+                span?.SetTag("phash.full_hash", fullHash);
+                span?.SetTag("phash.merged_hit_count", hits.Count);
+                span?.SetTag("phash.winning_source", winningSource);
+
+                FullPhashCandidateHist.Record(fullHits.Count);
+                WinningSourceCounter.Add(1, new KeyValuePair<string, object?>("source", winningSource));
+
+                sw.Stop();
+                // Surface the art hash on the response (legacy field) — full hash is in
+                // span tags only. Order doesn't really matter; art is the one users see.
+                return ((long?) artHash, (int) sw.ElapsedMilliseconds, (IReadOnlyList<PHashIndex.PHashHit>) hits);
             }
             catch (Exception ex)
             {
@@ -599,14 +725,37 @@ public sealed class ScanHandler
                 PhashFailureCounter.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
                 return ((long?) null, (int) sw.ElapsedMilliseconds, (IReadOnlyList<PHashIndex.PHashHit>) Array.Empty<PHashIndex.PHashHit>());
             }
-
-            var hits = _pHashIndex.Search(hash, PHashMaxHamming).Take(PHashTopK).ToList();
-            sw.Stop();
-            span?.SetTag("phash.hash", hash);
-            span?.SetTag("phash.hit_count", hits.Count);
-            span?.SetTag("phash.best_hamming", hits.Count > 0 ? hits[0].Distance : -1);
-            return ((long?) hash, (int) sw.ElapsedMilliseconds, (IReadOnlyList<PHashIndex.PHashHit>) hits);
         });
+    }
+
+    // Helper: hashes an image, optionally also its 180° rotation, and returns whichever
+    // side produced the lower best-hamming hit. Used by both the art-pHash and full-card
+    // pHash branches in RunPHashAsync.
+    private (long Hash, IReadOnlyList<PHashIndex.PHashHit> Hits, int BestHamming, string WinningRotation) ComputeAndSearch(
+        Image<Rgba32> img,
+        bool tryAltRotation,
+        Func<long, IReadOnlyList<PHashIndex.PHashHit>> search)
+    {
+        var primaryHash = _pHash.Compute(img);
+        var primaryHits = search(primaryHash);
+        var primaryBest = primaryHits.Count > 0 ? primaryHits[0].Distance : int.MaxValue;
+
+        if (!tryAltRotation)
+        {
+            return (primaryHash, primaryHits, primaryBest, "primary");
+        }
+
+        img.Mutate(ctx => ctx.Rotate(RotateMode.Rotate180));
+        var altHash = _pHash.Compute(img);
+        var altHits = search(altHash);
+        var altBest = altHits.Count > 0 ? altHits[0].Distance : int.MaxValue;
+
+        if (altBest < primaryBest)
+        {
+            return (altHash, altHits, altBest, "alt_180");
+        }
+
+        return (primaryHash, primaryHits, primaryBest, "primary");
     }
 
     private async Task<(OcrRegions Regions, int LatencyMs)> RunOcrRegionsAsync(byte[] imageBytes, string mediaType, Guid scanId, CancellationToken ct)
@@ -684,6 +833,39 @@ public sealed class ScanHandler
         await using var output = new MemoryStream();
         await img.SaveAsJpegAsync(output, ct);
         return output.ToArray();
+    }
+
+    // Decides whether the first OCR pass is strong enough to skip the 180° rotation
+    // retry. Two acceptance paths:
+    //   1. High coverage (4-5 zones populated) → trust regardless of agreement quality.
+    //   2. Borderline coverage (3) AND the top OCR candidate has multi-zone agreement
+    //      at ≥ 0.7 in 3+ zones → trust because both classifier and matcher concur.
+    // Below the existing RotationRetryCoverageThreshold (3), retry runs as before.
+    private static bool IsFirstPassConfident(CardZones zones, CardZoneScoringResult scoring, Activity? rootSpan)
+    {
+        var coverage = ZoneCoverageScore(zones);
+        if (coverage >= RotationRetryHighCoverageSkipThreshold)
+        {
+            rootSpan?.SetTag("rotation.first_pass_confidence", "high_coverage");
+            return true;
+        }
+
+        if (coverage < RotationRetryCoverageThreshold)
+        {
+            return false;
+        }
+
+        var topRow = scoring.ByPrinting.Values
+            .OrderByDescending(r => r.AggregateScore)
+            .FirstOrDefault();
+        if (topRow is not null
+            && topRow.ContributingZoneCount(RotationRetryStrongZoneScoreThreshold) >= RotationRetryStrongZoneMinCount)
+        {
+            rootSpan?.SetTag("rotation.first_pass_confidence", "strong_zone_agreement");
+            return true;
+        }
+
+        return false;
     }
 
     // Counts zones that have meaningful content. The Name 3-char floor and RulesText

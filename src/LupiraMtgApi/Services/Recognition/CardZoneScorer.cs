@@ -156,9 +156,30 @@ public sealed class CardZoneScorer
         // aligns with the DB rules and ignores the rest. Coalesce to OracleText so rows
         // whose RulesText is null (older sync, or upstream missing printed_text) still
         // get scored against canonical English oracle text.
-        var rows = await _db.CardPrintings
+        //
+        // Order matters in CardZoneScorer.ScoreAsync — Name and TypeLine run before this
+        // method, so byPrinting holds the candidates from those zones. Narrow the rules
+        // query to that pool when it has anything in it: ~80K rows → typical 25-75 pool
+        // members drops the query latency from ~900ms to <50ms. Keep full-scan as the
+        // fallback because RulesText can be the only signal that finds a card with a
+        // garbled name (printer ink smear, foreign printing, …).
+        var query = _db.CardPrintings
             .AsNoTracking()
-            .Where(p => p.RulesText != null || p.OracleText != null)
+            .Where(p => p.RulesText != null || p.OracleText != null);
+
+        if (byPrinting.Count > 0)
+        {
+            var candidateIds = byPrinting.Keys.ToList();
+            query = query.Where(p => candidateIds.Contains(p.Id));
+            span?.SetTag("zone.scope", "narrowed");
+            span?.SetTag("zone.pool_size", candidateIds.Count);
+        }
+        else
+        {
+            span?.SetTag("zone.scope", "full_scan");
+        }
+
+        var rows = await query
             .Select(p => new
             {
                 p.Id,
