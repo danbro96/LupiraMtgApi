@@ -343,6 +343,7 @@ public sealed class ScryfallSyncRunner
             entity.SyncedAt = now;
 
             ApplyFaceFields(entity, dto);
+            entity.Faces = BuildFaces(dto, entity.Faces);
 
             if (existing is null)
             {
@@ -354,12 +355,18 @@ public sealed class ScryfallSyncRunner
                 report.PrintingsUpdated++;
             }
 
-            if (_options.DownloadImages && entity.ImageObjectKey is null && dto.ImageUris?.Normal is { Length: > 0 })
+            // For layouts where each face carries its own image_uris (transform,
+            // modal_dfc, double_faced_token, reversible_card) Scryfall leaves the
+            // top-level image_uris null. Fall back to the front face so the parent
+            // (recognizer-facing) image is still populated for those layouts.
+            var frontImageUris = dto.ImageUris ?? dto.CardFaces?.FirstOrDefault()?.ImageUris;
+
+            if (_options.DownloadImages && entity.ImageObjectKey is null && frontImageUris?.Normal is { Length: > 0 })
             {
                 // Buffer the bytes so we can both upload AND compute FullCardPHash from the
                 // same in-memory copy — same pattern as the ArtCrop block below. ~80-150KB
                 // per printing × batch size of memory pressure during sync. Acceptable.
-                await using var normalStream = await source.DownloadImageAsync(dto.ImageUris.Normal, ct);
+                await using var normalStream = await source.DownloadImageAsync(frontImageUris.Normal, ct);
                 using var ms = new MemoryStream();
                 await normalStream.CopyToAsync(ms, ct);
                 ms.Position = 0;
@@ -396,9 +403,9 @@ public sealed class ScryfallSyncRunner
                 }
             }
 
-            if (_options.DownloadImages && entity.ImageArtCropKey is null && dto.ImageUris?.ArtCrop is { Length: > 0 })
+            if (_options.DownloadImages && entity.ImageArtCropKey is null && frontImageUris?.ArtCrop is { Length: > 0 })
             {
-                await using var artStream = await source.DownloadImageAsync(dto.ImageUris.ArtCrop, ct);
+                await using var artStream = await source.DownloadImageAsync(frontImageUris.ArtCrop, ct);
                 using var ms = new MemoryStream();
                 await artStream.CopyToAsync(ms, ct);
                 ms.Position = 0;
@@ -411,6 +418,54 @@ public sealed class ScryfallSyncRunner
                     ms.Position = 0;
                     entity.ArtPHash = await pHash.ComputeAsync(ms, ct);
                     report.PHashesComputed++;
+                }
+            }
+
+            // Multi-faced layouts: ensure each face has image keys filled in.
+            //
+            // Layouts with per-face images (transform / modal_dfc / double_faced_token /
+            // reversible_card): each face has its own image_uris. Face 0 reuses the parent
+            // keys (already uploaded above); faces 1..N upload to face{i}/ paths so the
+            // mobile face-flip UI can show every side.
+            //
+            // Layouts that share one image (split / flip / adventure / meld): faces have
+            // no image_uris of their own — they all point at the parent keys.
+            if (_options.DownloadImages && entity.Faces is { Count: > 0 } && dto.CardFaces is { Length: > 0 })
+            {
+                for (var i = 0; i < entity.Faces.Count && i < dto.CardFaces.Length; i++)
+                {
+                    var faceUris = dto.CardFaces[i].ImageUris;
+                    var faceEntity = entity.Faces[i];
+
+                    if (faceUris is null)
+                    {
+                        // Shared-image layout (split/flip/adventure/meld): every face uses parent keys.
+                        faceEntity.ImageObjectKey ??= entity.ImageObjectKey;
+                        faceEntity.ImageArtCropKey ??= entity.ImageArtCropKey;
+                        continue;
+                    }
+
+                    if (i == 0)
+                    {
+                        // Face 0 of a per-face-image layout — already on disk under parent keys.
+                        faceEntity.ImageObjectKey ??= entity.ImageObjectKey;
+                        faceEntity.ImageArtCropKey ??= entity.ImageArtCropKey;
+                        continue;
+                    }
+
+                    if (faceEntity.ImageObjectKey is null && faceUris.Normal is { Length: > 0 })
+                    {
+                        await UploadImageAsync(images, source, faceUris.Normal, FaceNormalKey(dto.Id, i), "image/jpeg", ct);
+                        faceEntity.ImageObjectKey = FaceNormalKey(dto.Id, i);
+                        report.ImagesUploaded++;
+                    }
+
+                    if (faceEntity.ImageArtCropKey is null && faceUris.ArtCrop is { Length: > 0 })
+                    {
+                        await UploadImageAsync(images, source, faceUris.ArtCrop, FaceArtCropKey(dto.Id, i), "image/jpeg", ct);
+                        faceEntity.ImageArtCropKey = FaceArtCropKey(dto.Id, i);
+                        report.ImagesUploaded++;
+                    }
                 }
             }
 
@@ -452,6 +507,46 @@ public sealed class ScryfallSyncRunner
 
     private static string ArtCropKey(string printingId) => $"printings/{printingId}/art_crop.jpg";
 
+    private static string FaceNormalKey(string printingId, int faceIndex) =>
+        $"printings/{printingId}/face{faceIndex}/normal.jpg";
+
+    private static string FaceArtCropKey(string printingId, int faceIndex) =>
+        $"printings/{printingId}/face{faceIndex}/art_crop.jpg";
+
+    /// <summary>
+    /// Rebuilds the <see cref="CardPrinting.Faces"/> list from Scryfall's
+    /// <c>card_faces</c>. Image keys are preserved from <paramref name="existing"/>
+    /// (filled later by the upload pass). Returns null for single-faced cards
+    /// so the column stays sparse — only multi-faced rows carry a value.
+    /// </summary>
+    private static List<CardFace>? BuildFaces(ScryfallCardDto dto, List<CardFace>? existing)
+    {
+        if (dto.CardFaces is null || dto.CardFaces.Length == 0)
+        {
+            return null;
+        }
+
+        var faces = new List<CardFace>(dto.CardFaces.Length);
+        for (var i = 0; i < dto.CardFaces.Length; i++)
+        {
+            var f = dto.CardFaces[i];
+            var prior = existing?.FirstOrDefault(x => x.FaceIndex == i);
+            faces.Add(new CardFace
+            {
+                FaceIndex = i,
+                Name = f.Name ?? string.Empty,
+                ManaCost = f.ManaCost,
+                TypeLine = f.TypeLine,
+                OracleText = f.OracleText,
+                Power = f.Power,
+                Toughness = f.Toughness,
+                ImageObjectKey = prior?.ImageObjectKey,
+                ImageArtCropKey = prior?.ImageArtCropKey,
+            });
+        }
+        return faces;
+    }
+
     private static void ApplyFaceFields(CardPrinting entity, ScryfallCardDto dto)
     {
         var lang = string.IsNullOrWhiteSpace(dto.Lang) ? "en" : dto.Lang!;
@@ -469,6 +564,7 @@ public sealed class ScryfallSyncRunner
         var printedText = face?.PrintedText ?? dto.PrintedText;
         var power = face?.Power ?? dto.Power;
         var toughness = face?.Toughness ?? dto.Toughness;
+        var manaCost = face?.ManaCost ?? dto.ManaCost;
 
         // Prefer the printed type line for non-English printings; fall back to canonical.
         var typeLineForParse = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(printedTypeLine)
@@ -487,6 +583,10 @@ public sealed class ScryfallSyncRunner
 
         entity.Power = power;
         entity.Toughness = toughness;
+        entity.ManaCost = manaCost;
+        // CMC is oracle-level (same across faces) so don't dig into card_faces; the
+        // top-level `cmc` is authoritative on Scryfall's bulk rows.
+        entity.Cmc = dto.Cmc;
         entity.Lang = lang;
         entity.Layout = layout;
         entity.IsFoil = dto.IsFoil;

@@ -26,7 +26,7 @@ public static class ScanFeedbackEndpoint
                 feedback — assume the latest is the user's most considered answer.
                 """)
             .Produces<ScanFeedbackResponse>(StatusCodes.Status200OK)
-            .Produces<string>(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound);
 }

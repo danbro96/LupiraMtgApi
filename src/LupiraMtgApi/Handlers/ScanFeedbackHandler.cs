@@ -25,7 +25,7 @@ public sealed class ScanFeedbackHandler
         _db = db;
     }
 
-    public async Task<Results<Ok<ScanFeedbackResponse>, NotFound, BadRequest<string>, UnauthorizedHttpResult>> SubmitAsync(
+    public async Task<Results<Ok<ScanFeedbackResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> SubmitAsync(
         HttpContext httpContext,
         Guid scanId,
         ScanFeedbackRequest request,
@@ -38,7 +38,7 @@ public sealed class ScanFeedbackHandler
 
         if (string.IsNullOrWhiteSpace(request.CorrectPrintingId))
         {
-            return TypedResults.BadRequest("correctPrintingId is required.");
+            return Problems.BadRequest("correctPrintingId is required.");
         }
 
         var printingId = request.CorrectPrintingId.Trim();
@@ -59,7 +59,7 @@ public sealed class ScanFeedbackHandler
             ct);
         if (!printingExists)
         {
-            return TypedResults.BadRequest("Unknown printing id.");
+            return Problems.BadRequest("Unknown printing id.");
         }
 
         int? rank = null;

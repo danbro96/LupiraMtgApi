@@ -39,6 +39,7 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(p => p.Rarity).HasMaxLength(16);
             e.Property(p => p.ColorIdentity).HasColumnType("text[]");
             e.Property(p => p.Prices).HasColumnType("jsonb");
+            e.Property(p => p.Faces).HasColumnType("jsonb");
 
             e.Property(p => p.Supertype).HasMaxLength(64);
             e.Property(p => p.Type).HasMaxLength(64).IsRequired();
@@ -47,6 +48,9 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(p => p.OracleText).HasColumnType("text");
             e.Property(p => p.Power).HasMaxLength(16);
             e.Property(p => p.Toughness).HasMaxLength(16);
+            e.Property(p => p.ManaCost).HasMaxLength(64);
+            e.Property(p => p.Cmc).HasColumnType("real");
+            e.HasIndex(p => p.Cmc);
             e.Property(p => p.Lang).HasMaxLength(8).IsRequired();
             e.Property(p => p.Layout).HasMaxLength(32).IsRequired();
             e.Property(p => p.IsFoil).IsRequired();

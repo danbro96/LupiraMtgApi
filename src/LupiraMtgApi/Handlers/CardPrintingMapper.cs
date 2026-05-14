@@ -16,7 +16,7 @@ public sealed class CardPrintingMapper
         _images = images;
     }
 
-    public async Task<CardPrintingResponse> MapAsync(CardPrinting printing, string setName, CancellationToken ct)
+    public async Task<CardImageUrls> MapImagesAsync(CardPrinting printing, CancellationToken ct)
     {
         var imageUrls = new CardImageUrls();
 
@@ -30,6 +30,14 @@ public sealed class CardPrintingMapper
             imageUrls.ArtCrop = await _images.CreatePresignedGetUrlAsync(printing.ImageArtCropKey, PresignExpiry, ct);
         }
 
+        return imageUrls;
+    }
+
+    public async Task<CardPrintingResponse> MapAsync(CardPrinting printing, string setName, CancellationToken ct)
+    {
+        var imageUrls = await MapImagesAsync(printing, ct);
+        var faces = await MapFacesAsync(printing.Faces, ct);
+
         return new CardPrintingResponse
         {
             Id = printing.Id,
@@ -40,8 +48,52 @@ public sealed class CardPrintingMapper
             CollectorNumber = printing.CollectorNumber,
             ColorIdentity = printing.ColorIdentity,
             Rarity = printing.Rarity,
+            ManaCost = printing.ManaCost,
+            Cmc = printing.Cmc,
             Images = imageUrls,
             Prices = printing.Prices,
+            Faces = faces,
         };
+    }
+
+    public async Task<IReadOnlyList<CardFaceResponse>?> MapFacesAsync(
+        IReadOnlyList<CardFace>? faces,
+        CancellationToken ct)
+    {
+        if (faces is null || faces.Count == 0)
+        {
+            return null;
+        }
+
+        var result = new List<CardFaceResponse>(faces.Count);
+        foreach (var face in faces.OrderBy(f => f.FaceIndex))
+        {
+            CardImageUrls? faceImages = null;
+            if (face.ImageObjectKey is { Length: > 0 } || face.ImageArtCropKey is { Length: > 0 })
+            {
+                faceImages = new CardImageUrls();
+                if (face.ImageObjectKey is { Length: > 0 })
+                {
+                    faceImages.Normal = await _images.CreatePresignedGetUrlAsync(face.ImageObjectKey, PresignExpiry, ct);
+                }
+                if (face.ImageArtCropKey is { Length: > 0 })
+                {
+                    faceImages.ArtCrop = await _images.CreatePresignedGetUrlAsync(face.ImageArtCropKey, PresignExpiry, ct);
+                }
+            }
+
+            result.Add(new CardFaceResponse
+            {
+                FaceIndex = face.FaceIndex,
+                Name = face.Name,
+                ManaCost = face.ManaCost,
+                TypeLine = face.TypeLine,
+                OracleText = face.OracleText,
+                Power = face.Power,
+                Toughness = face.Toughness,
+                Images = faceImages,
+            });
+        }
+        return result;
     }
 }

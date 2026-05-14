@@ -8,6 +8,7 @@ using LupiraMtgApi.Endpoints.Collections;
 using LupiraMtgApi.Endpoints.Me;
 using LupiraMtgApi.Endpoints.Scans;
 using LupiraMtgApi.Endpoints.Selections;
+using LupiraMtgApi.Endpoints.Sets;
 using LupiraMtgApi.Handlers;
 using LupiraMtgApi.Jobs;
 using LupiraMtgApi.Services;
@@ -30,6 +31,14 @@ using LupiraMtgApi.Services.SetSymbol;
 using LupiraMtgApi.Services.Storage;
 using LupiraMtgApi.Services.Recognition.Pipeline;
 using LupiraMtgApi.Services.Recognition.Steps;
+// `dotnet-getdocument` (Microsoft.Extensions.ApiDescription.Server's build-time
+// OpenAPI emitter) loads this assembly and runs Main() to obtain the document
+// provider — but it never calls `app.Run()`. When we detect that mode, we
+// skip startup work that needs external services (DB migrate, etc.) so the
+// build can complete on a developer machine without Postgres available.
+var isOpenApiBuild = Environment.GetCommandLineArgs()
+    .Any(a => a.Contains("getdocument", StringComparison.OrdinalIgnoreCase));
+
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
@@ -106,7 +115,10 @@ builder.Services.AddHostedService<SetSymbolIndexBootstrapper>();
 
 builder.Services.AddScoped<CardPrintingMapper>();
 builder.Services.AddScoped<CardInstanceHydrator>();
-builder.Services.AddScoped<CardSearchHandler>();
+builder.Services.AddScoped<CardCatalogHandler>();
+builder.Services.AddScoped<SetsHandler>();
+builder.Services.AddScoped<SetTypeWeightHandler>();
+builder.Services.AddScoped<ScanHistoryHandler>();
 builder.Services.AddScoped<AdminSyncHandler>();
 builder.Services.AddScoped<MeHandler>();
 builder.Services.AddScoped<CardZoneScorer>();
@@ -250,8 +262,9 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
 
 var app = builder.Build();
 
-await using (var scope = app.Services.CreateAsyncScope())
+if (!isOpenApiBuild)
 {
+    await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<LupiraMtgDbContext>();
     await db.Database.MigrateAsync();
 }
@@ -275,14 +288,17 @@ app.MapHealthEndpoint();
 
 app.MapRegisterDevice();
 app.MapWhoAmI().RequireAuthorization();
+app.MapUpdateMe().RequireAuthorization();
 
-app.MapGetPrinting().RequireAuthorization();
-app.MapCardSearch().RequireAuthorization();
 app.MapScan().RequireAuthorization();
 app.MapScanFeedback().RequireAuthorization();
 app.MapAdminSync().RequireAuthorization();
+app.MapSetTypeWeights();
 app.MapMyCards().RequireAuthorization();
+app.MapScanHistory();
 
+app.MapCards();
+app.MapSets();
 app.MapCollections();
 app.MapSelections();
 

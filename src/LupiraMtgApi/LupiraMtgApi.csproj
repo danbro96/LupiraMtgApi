@@ -7,8 +7,29 @@
     <RootNamespace>LupiraMtgApi</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    Emit the OpenAPI document at build time so the JSON spec stays in lockstep
+    with the actual Map* endpoint definitions. The committed file at
+    `openapi/v1.json` (relative to the repo root) is what LupiraMobile and
+    LupiraWeb run Orval against — no need to spin up the server to refresh it.
+
+    `Microsoft.Extensions.ApiDescription.Server` runs the `GetDocument.Insider`
+    tool during build, which loads the app's services (without Run()) and
+    serializes every registered OpenAPI document.
+  -->
+  <PropertyGroup>
+    <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
+    <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+    <!-- Two levels up from the csproj (src/LupiraMtgApi → repo root) → openapi/. -->
+    <OpenApiDocumentsDirectory>$(MSBuildThisFileDirectory)..\..\openapi</OpenApiDocumentsDirectory>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Scalar.AspNetCore" Version="2.14.9" />
 
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />

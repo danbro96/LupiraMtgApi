@@ -27,10 +27,10 @@ public static class SelectionsEndpoints
                 h.AddCardAsync(ctx, selectionId, body, ct))
             .WithSummary("Add a recognized card to the selection. Returns 409 on duplicate unless allowDuplicate=true.")
             .Produces<SelectionEntryResponse>(StatusCodes.Status200OK)
-            .Produces<string>(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
-            .Produces<string>(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapDelete("/{selectionId:guid}/cards/{instanceId:guid}", (HttpContext ctx, Guid selectionId, Guid instanceId, SelectionsHandler h, CancellationToken ct) =>
                 h.RemoveCardAsync(ctx, selectionId, instanceId, ct))
@@ -43,7 +43,7 @@ public static class SelectionsEndpoints
                 h.CommitAsync(ctx, selectionId, body, ct))
             .WithSummary("Commit selection cards into a collection.")
             .Produces<CommitSelectionResponse>(StatusCodes.Status200OK)
-            .Produces<string>(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound);
 

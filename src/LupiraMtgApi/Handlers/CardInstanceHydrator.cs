@@ -102,6 +102,28 @@ public sealed class CardInstanceHydrator
         return result;
     }
 
+    /// <summary>
+    /// Bulk-fetches just the names of the referenced printings. Used by paginated
+    /// listings to sort by name *before* slicing — so we hydrate (presign URLs etc.)
+    /// only the page we actually return.
+    /// </summary>
+    public async Task<Dictionary<string, string>> LoadPrintingNamesAsync(
+        IEnumerable<string> printingIds,
+        CancellationToken ct)
+    {
+        var distinct = printingIds.Distinct().ToList();
+        if (distinct.Count == 0)
+        {
+            return new Dictionary<string, string>();
+        }
+
+        return await _db.CardPrintings
+            .AsNoTracking()
+            .Where(p => distinct.Contains(p.Id))
+            .Select(p => new { p.Id, p.Name })
+            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
+    }
+
     private async Task<Dictionary<string, CardPrinting>> LoadPrintingsAsync(
         IEnumerable<string> ids,
         CancellationToken ct)

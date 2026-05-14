@@ -70,7 +70,7 @@ public sealed class SelectionsHandler
         return TypedResults.Ok(await this.MapAsync(doc, ct));
     }
 
-    public async Task<Results<Ok<SelectionEntryResponse>, NotFound, BadRequest<string>, Conflict<string>, UnauthorizedHttpResult>> AddCardAsync(
+    public async Task<Results<Ok<SelectionEntryResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> AddCardAsync(
         HttpContext httpContext,
         Guid selectionId,
         AddSelectionEntryRequest request,
@@ -93,7 +93,7 @@ public sealed class SelectionsHandler
             ct);
         if (printing is null)
         {
-            return TypedResults.BadRequest("Unknown printing id.");
+            return Problems.BadRequest("Unknown printing id.");
         }
 
         var language = string.IsNullOrEmpty(request.Language) ? "en" : request.Language;
@@ -107,7 +107,7 @@ public sealed class SelectionsHandler
                 string.Equals(c.Language, language, StringComparison.OrdinalIgnoreCase));
             if (clash)
             {
-                return TypedResults.Conflict("Already in selection. Pass allowDuplicate=true to add another copy.");
+                return Problems.Conflict("Already in selection. Pass allowDuplicate=true to add another copy.");
             }
         }
 
@@ -157,7 +157,7 @@ public sealed class SelectionsHandler
         return TypedResults.NoContent();
     }
 
-    public async Task<Results<Ok<CommitSelectionResponse>, NotFound, BadRequest<string>, UnauthorizedHttpResult>> CommitAsync(
+    public async Task<Results<Ok<CommitSelectionResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> CommitAsync(
         HttpContext httpContext,
         Guid selectionId,
         CommitSelectionRequest request,
@@ -187,7 +187,7 @@ public sealed class SelectionsHandler
 
         if (picked.Count == 0)
         {
-            return TypedResults.BadRequest("No selection entries match the requested instance IDs.");
+            return Problems.BadRequest("No selection entries match the requested instance IDs.");
         }
 
         var now = DateTimeOffset.UtcNow;

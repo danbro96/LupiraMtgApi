@@ -58,6 +58,12 @@ public sealed class ScryfallCardDto
     [JsonPropertyName("toughness")]
     public string? Toughness { get; set; }
 
+    [JsonPropertyName("mana_cost")]
+    public string? ManaCost { get; set; }
+
+    [JsonPropertyName("cmc")]
+    public float? Cmc { get; set; }
+
     [JsonPropertyName("card_faces")]
     public ScryfallCardFace[]? CardFaces { get; set; }
 

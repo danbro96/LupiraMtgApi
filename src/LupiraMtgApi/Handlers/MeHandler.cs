@@ -54,12 +54,37 @@ public sealed class MeHandler
             return TypedResults.Unauthorized();
         }
 
-        return TypedResults.Ok(new WhoAmIResponse
-        {
-            Id = device.Id,
-            DisplayName = device.DisplayName,
-            CreatedAt = device.CreatedAt,
-            LastSeenAt = device.LastSeenAt,
-        });
+        return TypedResults.Ok(ToResponse(device));
     }
+
+    public async Task<Results<Ok<WhoAmIResponse>, UnauthorizedHttpResult>> UpdateAsync(
+        HttpContext httpContext,
+        UpdateMeRequest? request,
+        CancellationToken ct)
+    {
+        if (!httpContext.TryGetOwnerId(out var ownerId))
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var device = await _db.Devices.FirstOrDefaultAsync(d => d.Id == ownerId, ct);
+        if (device is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var trimmed = request?.DisplayName?.Trim();
+        device.DisplayName = string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        await _db.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(ToResponse(device));
+    }
+
+    private static WhoAmIResponse ToResponse(DeviceUser device) => new()
+    {
+        Id = device.Id,
+        DisplayName = device.DisplayName,
+        CreatedAt = device.CreatedAt,
+        LastSeenAt = device.LastSeenAt,
+    };
 }

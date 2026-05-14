@@ -54,9 +54,24 @@ public sealed class CardPrinting
 
     public string? Toughness { get; set; }
 
+    // Mana cost string as printed on the card (e.g. "{2}{R}{R}" for Lightning Bolt's 4-mana
+    // cousin). Null for cards with no mana cost (lands; transform-back faces). Mirrors the
+    // front face for multi-faced layouts. Stored as plain text — not parsed server-side.
+    public string? ManaCost { get; set; }
+
+    // Converted/total mana value (Scryfall `cmc`, real). Same value across all printings of
+    // an oracle card, but stored on each printing for filter/sort efficiency.
+    public float? Cmc { get; set; }
+
     public string Lang { get; set; } = "en";
 
     public string Layout { get; set; } = string.Empty;
 
     public bool IsFoil { get; set; }
+
+    // Per-face data for multi-faced layouts (transform, modal_dfc, split, flip,
+    // adventure, meld, double_faced_token, reversible_card). Null for normal cards.
+    // Front face (FaceIndex 0) is also mirrored to the top-level columns; the
+    // recognizer pipeline keeps reading those for back-compat. Stored as JSONB.
+    public List<CardFace>? Faces { get; set; }
 }

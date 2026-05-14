@@ -26,19 +26,19 @@ public sealed class ScanHandler
         _scoring = scoring.Value;
     }
 
-    public async Task<Results<Ok<ScanResponse>, BadRequest<string>>> ScanAsync(
+    public async Task<Results<Ok<ScanResponse>, ProblemHttpResult>> ScanAsync(
         HttpContext httpContext,
         IFormFile image,
         CancellationToken ct)
     {
         if (image is null || image.Length == 0)
         {
-            return TypedResults.BadRequest("Image file is required.");
+            return Problems.BadRequest("Image file is required.");
         }
 
         if (image.Length > _scoring.MaxImageBytes)
         {
-            return TypedResults.BadRequest($"Image is too large; max {_scoring.MaxImageBytes} bytes.");
+            return Problems.BadRequest($"Image is too large; max {_scoring.MaxImageBytes} bytes.");
         }
 
         byte[] imageBytes;
