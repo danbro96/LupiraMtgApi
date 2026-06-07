@@ -6,27 +6,6 @@
     "version": "v1"
   },
   "paths": {
-    "/healthz": {
-      "get": {
-        "tags": [
-          "Meta"
-        ],
-        "summary": "Liveness probe.",
-        "description": "Returns 200 with `{ \"status\": \"ok\" }` as soon as the process is up.\nUsed by the TrueNAS / Docker healthcheck. Anonymous — no token required.",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/me/register": {
       "post": {
         "tags": [
@@ -2616,17 +2595,6 @@
           }
         }
       },
-      "HealthResponse": {
-        "required": [
-          "status"
-        ],
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string"
-          }
-        }
-      },
       "IFormFile": {
         "type": "string",
         "format": "binary"
@@ -3469,9 +3437,6 @@
     }
   },
   "tags": [
-    {
-      "name": "Meta"
-    },
     {
       "name": "Me"
     },

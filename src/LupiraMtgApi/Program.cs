@@ -69,6 +69,9 @@ builder.Services.AddDbContext<LupiraMtgDbContext>(opts =>
     });
 });
 
+// Liveness (/livez) + readiness (/readyz, pings Postgres) probes.
+builder.Services.AddAppHealthChecks();
+
 builder.Services.Configure<MinioImageStoreOptions>(builder.Configuration.GetSection("Minio"));
 builder.Services.Configure<ScryfallSyncOptions>(builder.Configuration.GetSection("ScryfallSync"));
 builder.Services.Configure<FlorenceOcrOptions>(builder.Configuration.GetSection("Florence"));
@@ -284,7 +287,7 @@ app.MapGet("/", () => TypedResults.Redirect("/scalar"))
    .ExcludeFromDescription()
    .AllowAnonymous();
 
-app.MapHealthEndpoint();
+app.MapAppHealthChecks(app.Environment);
 
 app.MapRegisterDevice();
 app.MapWhoAmI().RequireAuthorization();

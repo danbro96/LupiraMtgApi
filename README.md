@@ -2,7 +2,7 @@
 
 Backend for the Lupira MTG mobile app — Magic: The Gathering card metadata, scan-based recognition, and per-user collection management. Self-hosted on TrueNAS, deployed alongside KokoroApi/FlorenceApi/LupiraWeb.
 
-> **Status:** Phase 1 skeleton — `/healthz`, OpenAPI, Scalar UI, OIDC, Marten + EF Core wired. No business endpoints yet. See the architecture plan in `KokoroApi/.claude/plans/i-want-to-plan-modular-taco.md` for the roadmap.
+> **Status:** Phase 1 skeleton — `/livez` + `/readyz`, OpenAPI, Scalar UI, OIDC, Marten + EF Core wired. No business endpoints yet. See the architecture plan in `KokoroApi/.claude/plans/i-want-to-plan-modular-taco.md` for the roadmap.
 
 ## Stack
 
@@ -23,7 +23,7 @@ You need a Postgres reachable at the connection string in `appsettings.Developme
 dotnet restore src/LupiraMtgApi/LupiraMtgApi.csproj
 dotnet run --project src/LupiraMtgApi/LupiraMtgApi.csproj
 # → http://localhost:8080/scalar
-# → http://localhost:8080/healthz
+# → http://localhost:8080/livez   (liveness)  ·  /readyz (readiness, pings Postgres)
 ```
 
 In dev, OIDC validation is effectively bypassed when `Auth:Authority` is empty — Bearer tokens still parse, but issuer/audience checks are skipped. Production must always set both.
