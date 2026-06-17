@@ -1,5 +1,4 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Admin;
 
 namespace LupiraMtgApi.Endpoints.Admin;
 

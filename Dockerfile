@@ -1,14 +1,20 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+# Copy Directory.Build.props (shared props + analyzers) and every csproj before restore so the
+# host's `dotnet restore` resolves the three context libraries it references transitively.
+COPY Directory.Build.props ./
+COPY src/LupiraMtgApi.Catalog/LupiraMtgApi.Catalog.csproj src/LupiraMtgApi.Catalog/
+COPY src/LupiraMtgApi.Recognition/LupiraMtgApi.Recognition.csproj src/LupiraMtgApi.Recognition/
+COPY src/LupiraMtgApi.Collections/LupiraMtgApi.Collections.csproj src/LupiraMtgApi.Collections/
 COPY src/LupiraMtgApi/LupiraMtgApi.csproj src/LupiraMtgApi/
 RUN dotnet restore src/LupiraMtgApi/LupiraMtgApi.csproj
-COPY src/LupiraMtgApi/ src/LupiraMtgApi/
+COPY src/ src/
 RUN dotnet publish src/LupiraMtgApi/LupiraMtgApi.csproj -c Release -o /out --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-# libfontconfig1 is required by SkiaSharp.NativeAssets.Linux — without it the SkiaSharp
-# native init (SKImageInfo cctor) throws DllNotFoundException on the first icon
-# rasterize, breaking the set-symbol pipeline.
+# libfontconfig1 is required by SkiaSharp.NativeAssets.Linux (pulled in transitively via the
+# Recognition context) — without it the SkiaSharp native init (SKImageInfo cctor) throws
+# DllNotFoundException on the first icon rasterize, breaking the set-symbol pipeline.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl libfontconfig1 \
  && rm -rf /var/lib/apt/lists/*

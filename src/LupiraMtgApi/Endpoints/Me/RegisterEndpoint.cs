@@ -1,5 +1,4 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models;
 using LupiraMtgApi.Models.Auth;
 namespace LupiraMtgApi.Endpoints.Me;
 

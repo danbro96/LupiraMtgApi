@@ -1,5 +1,4 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Scans;
 
 namespace LupiraMtgApi.Endpoints.Me;
 

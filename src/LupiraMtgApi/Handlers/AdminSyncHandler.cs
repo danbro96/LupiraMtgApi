@@ -1,7 +1,6 @@
-using LupiraMtgApi.Jobs;
-using LupiraMtgApi.Models;
-using Microsoft.AspNetCore.Http.HttpResults;
 using LupiraMtgApi.Models.Sync;
+using LupiraMtgApi.Sync;
+using Microsoft.AspNetCore.Http.HttpResults;
 namespace LupiraMtgApi.Handlers;
 
 public sealed class AdminSyncHandler

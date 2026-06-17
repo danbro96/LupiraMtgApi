@@ -1,7 +1,6 @@
 using LupiraMtgApi.Auth;
-using LupiraMtgApi.Data;
-using LupiraMtgApi.Data.Entities;
-using LupiraMtgApi.Models;
+using LupiraMtgApi.Catalog.Data;
+using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Models.Auth;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;

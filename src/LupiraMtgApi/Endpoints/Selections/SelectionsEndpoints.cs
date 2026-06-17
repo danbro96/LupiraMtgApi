@@ -1,5 +1,4 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Selections;
 
 namespace LupiraMtgApi.Endpoints.Selections;
 

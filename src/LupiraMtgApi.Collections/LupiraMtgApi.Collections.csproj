@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Bounded context: user state (users schema via Marten) — collections, selections,
+         profiles. Depends on Catalog for card hydration. -->
+    <RootNamespace>LupiraMtgApi.Collections</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LupiraMtgApi.Catalog\LupiraMtgApi.Catalog.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Marten" Version="9.8.2" />
+  </ItemGroup>
+
+  <!-- Restore the Microsoft.Extensions.* global usings the Web SDK provided implicitly. No ASP.NET. -->
+  <ItemGroup>
+    <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

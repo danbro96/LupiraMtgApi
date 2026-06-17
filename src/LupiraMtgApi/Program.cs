@@ -1,6 +1,7 @@
-using LupiraMtgApi;
+using JasperFx;
 using LupiraMtgApi.Auth;
-using LupiraMtgApi.Data;
+using LupiraMtgApi.Catalog.Data;
+using LupiraMtgApi.Collections.Data;
 using LupiraMtgApi.Endpoints;
 using LupiraMtgApi.Endpoints.Admin;
 using LupiraMtgApi.Endpoints.Cards;
@@ -10,8 +11,8 @@ using LupiraMtgApi.Endpoints.Scans;
 using LupiraMtgApi.Endpoints.Selections;
 using LupiraMtgApi.Endpoints.Sets;
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Jobs;
-using LupiraMtgApi.Services;
+using LupiraMtgApi.Recognition.Data;
+using LupiraMtgApi.Sync;
 using Marten;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -23,14 +24,6 @@ using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
-using LupiraMtgApi.Services.Imaging;
-using LupiraMtgApi.Services.Ocr;
-using LupiraMtgApi.Services.Recognition;
-using LupiraMtgApi.Services.Scryfall;
-using LupiraMtgApi.Services.SetSymbol;
-using LupiraMtgApi.Services.Storage;
-using LupiraMtgApi.Services.Recognition.Pipeline;
-using LupiraMtgApi.Services.Recognition.Steps;
 // `dotnet-getdocument` (Microsoft.Extensions.ApiDescription.Server's build-time
 // OpenAPI emitter) loads this assembly and runs Main() to obtain the document
 // provider — but it never calls `app.Run()`. When we detect that mode, we
@@ -38,6 +31,11 @@ using LupiraMtgApi.Services.Recognition.Steps;
 // build can complete on a developer machine without Postgres available.
 var isOpenApiBuild = Environment.GetCommandLineArgs()
     .Any(a => a.Contains("getdocument", StringComparison.OrdinalIgnoreCase));
+
+// One-shot schema apply: `dotnet run -- --apply-schema` applies EF migrations + Marten schema
+// and exits. Production composes with AutoCreate.None and runs this deliberately, never
+// auto-migrating on a normal boot.
+var applySchema = args.Contains("--apply-schema");
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,7 +48,15 @@ builder.Services
         opts.Connection(connectionString);
         opts.DatabaseSchemaName = "users";
         opts.UseSystemTextJsonForSerialization();
-        MartenRegistrations.Configure(opts);
+
+        // Prod controls schema explicitly (see --apply-schema); only dev auto-creates.
+        opts.AutoCreateSchemaObjects = builder.Environment.IsDevelopment()
+            ? AutoCreate.CreateOrUpdate
+            : AutoCreate.None;
+
+        // Each context contributes its own document registrations.
+        CollectionsMartenRegistrations.Configure(opts);
+        RecognitionMartenRegistrations.Configure(opts);
     })
     .UseLightweightSessions();
 
@@ -72,81 +78,29 @@ builder.Services.AddDbContext<LupiraMtgDbContext>(opts =>
 // Liveness (/livez) + readiness (/readyz, pings Postgres) probes.
 builder.Services.AddAppHealthChecks();
 
-builder.Services.Configure<MinioImageStoreOptions>(builder.Configuration.GetSection("Minio"));
+// The three bounded contexts — each registers its own Application + Infrastructure services.
+builder.Services.AddCatalog(builder.Configuration);
+builder.Services.AddRecognition(builder.Configuration);
+builder.Services.AddCollections();
+
+// Cross-context Scryfall sync orchestration lives in the host (it writes Catalog data + images and
+// rebuilds Recognition's indexes, so it sits above both contexts).
 builder.Services.Configure<ScryfallSyncOptions>(builder.Configuration.GetSection("ScryfallSync"));
-builder.Services.Configure<FlorenceOcrOptions>(builder.Configuration.GetSection("Florence"));
-builder.Services.Configure<ScanScoringOptions>(builder.Configuration.GetSection("Scan:Scoring"));
-
-builder.Services.AddSingleton<IImageStore, MinioImageStore>();
-builder.Services.AddSingleton<PHashService>();
-builder.Services.AddSingleton<PHashIndex>();
-builder.Services.AddSingleton<FullCardPHashIndex>();
-builder.Services.AddSingleton<CardCropService>();
-builder.Services.AddSingleton<CardZoneClassifier>();
-builder.Services.AddSingleton<SetSymbolRasterizer>();
-builder.Services.AddSingleton<SetSymbolIndex>();
-builder.Services.AddSingleton<SetSymbolDetector>();
-builder.Services.AddSingleton<ScanPHashRunner>();
-
-builder.Services.AddHttpClient<ICardCatalogSource, ScryfallCatalogSource>(client =>
-{
-    client.BaseAddress = new Uri("https://api.scryfall.com/");
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("LupiraMtgApi/0.1 (+https://github.com/danbro96/LupiraMtgApi)");
-    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-    client.Timeout = TimeSpan.FromMinutes(5);
-});
-
-builder.Services.AddHttpClient<IOcrService, FlorenceOcrService>((sp, client) =>
-{
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<FlorenceOcrOptions>>().Value;
-    var url = opts.Url.EndsWith('/') ? opts.Url : opts.Url + "/";
-    client.BaseAddress = new Uri(url);
-    if (!string.IsNullOrEmpty(opts.ApiKey))
-    {
-        client.DefaultRequestHeaders.Add("X-API-Key", opts.ApiKey);
-    }
-
-    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-    client.Timeout = TimeSpan.FromSeconds(Math.Max(5, opts.TimeoutSeconds));
-});
-
 builder.Services.AddSingleton<ScryfallSyncRunner>();
 builder.Services.AddHostedService<ScryfallSyncJob>();
-builder.Services.AddHostedService<PHashIndexBootstrapper>();
-builder.Services.AddHostedService<FullCardPHashIndexBootstrapper>();
-builder.Services.AddHostedService<SetSymbolIndexBootstrapper>();
 
-builder.Services.AddScoped<CardPrintingMapper>();
-builder.Services.AddScoped<CardInstanceHydrator>();
+// Host transport adapters (thin) over the context Application services.
 builder.Services.AddScoped<CardCatalogHandler>();
 builder.Services.AddScoped<SetsHandler>();
 builder.Services.AddScoped<SetTypeWeightHandler>();
+builder.Services.AddScoped<ScanHandler>();
+builder.Services.AddScoped<ScanFeedbackHandler>();
 builder.Services.AddScoped<ScanHistoryHandler>();
-builder.Services.AddScoped<AdminSyncHandler>();
-builder.Services.AddScoped<MeHandler>();
-builder.Services.AddScoped<CardZoneScorer>();
 builder.Services.AddScoped<CollectionsHandler>();
 builder.Services.AddScoped<SelectionsHandler>();
 builder.Services.AddScoped<MyCardsHandler>();
-
-// Scan pipeline: each step registered as IScanStep in execution order. DI resolves
-// IEnumerable<IScanStep> in registration order, so the order below IS the pipeline.
-// Add or remove a step by editing this list — no surgery on ScanHandler.
-builder.Services.AddScoped<IScanStep, UploadOriginalStep>();
-builder.Services.AddScoped<IScanStep, CropStep>();
-builder.Services.AddScoped<IScanStep, PrimaryRecognitionStep>();
-builder.Services.AddScoped<IScanStep, ZoneClassifyStep>();
-builder.Services.AddScoped<IScanStep, ZoneScoreStep>();
-builder.Services.AddScoped<IScanStep, RotationRetryStep>();
-builder.Services.AddScoped<IScanStep, FusionStep>();
-builder.Services.AddScoped<IScanStep, SetTypeWeightStep>();
-builder.Services.AddScoped<IScanStep, HydrateStep>();
-builder.Services.AddScoped<IScanStep, ConfidenceStep>();
-builder.Services.AddScoped<IScanStep, RecordOutcomeStep>();
-builder.Services.AddScoped<IScanStep, PersistScanLogStep>();
-builder.Services.AddScoped<ScanPipeline>();
-builder.Services.AddScoped<ScanHandler>();
-builder.Services.AddScoped<ScanFeedbackHandler>();
+builder.Services.AddScoped<MeHandler>();
+builder.Services.AddScoped<AdminSyncHandler>();
 
 builder.Services.AddOpenApi("v1", options =>
 {
@@ -265,7 +219,19 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
 
 var app = builder.Build();
 
-if (!isOpenApiBuild)
+// One-shot schema apply (prod): EF migrations + Marten schema, then exit.
+if (applySchema)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<LupiraMtgDbContext>();
+    await db.Database.MigrateAsync();
+    var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+    await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+    return;
+}
+
+// Dev convenience: auto-apply EF migrations on boot. Prod uses --apply-schema instead.
+if (!isOpenApiBuild && app.Environment.IsDevelopment())
 {
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<LupiraMtgDbContext>();

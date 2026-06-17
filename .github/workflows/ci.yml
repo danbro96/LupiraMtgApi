@@ -15,5 +15,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - run: dotnet restore src/LupiraMtgApi/LupiraMtgApi.csproj
-      - run: dotnet build src/LupiraMtgApi/LupiraMtgApi.csproj --no-restore -c Release
+      - run: dotnet restore LupiraMtgApi.slnx
+      - run: dotnet build LupiraMtgApi.slnx --no-restore -c Release
+      - run: dotnet test LupiraMtgApi.slnx --no-build -c Release

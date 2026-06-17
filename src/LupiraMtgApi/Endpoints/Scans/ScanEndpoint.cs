@@ -1,6 +1,4 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Scans;
-using Microsoft.AspNetCore.Http;
 
 namespace LupiraMtgApi.Endpoints.Scans;
 

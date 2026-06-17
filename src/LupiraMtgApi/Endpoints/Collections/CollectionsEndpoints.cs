@@ -1,5 +1,4 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Collections;
 
 namespace LupiraMtgApi.Endpoints.Collections;
 

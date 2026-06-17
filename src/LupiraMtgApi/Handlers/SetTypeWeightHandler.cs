@@ -1,36 +1,20 @@
-using LupiraMtgApi.Data;
-using LupiraMtgApi.Data.Entities;
-using LupiraMtgApi.Models.Admin;
+using LupiraMtgApi.Catalog.Application;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 
 namespace LupiraMtgApi.Handlers;
 
+/// <summary>
+/// Thin transport adapter over <see cref="SetTypeWeightService"/>. Input validation (canonical
+/// setType, finite non-negative weight) is a transport concern handled here before the service call.
+/// </summary>
 public sealed class SetTypeWeightHandler
 {
-    private readonly LupiraMtgDbContext _db;
+    private readonly SetTypeWeightService _service;
 
-    public SetTypeWeightHandler(LupiraMtgDbContext db)
-    {
-        _db = db;
-    }
+    public SetTypeWeightHandler(SetTypeWeightService service) => _service = service;
 
-    public async Task<Ok<SetTypeWeightListResponse>> ListAsync(CancellationToken ct)
-    {
-        var weights = await _db.SetTypeWeights
-            .AsNoTracking()
-            .OrderByDescending(w => w.Weight)
-            .ThenBy(w => w.SetType)
-            .Select(w => new SetTypeWeightResponse
-            {
-                SetType = w.SetType,
-                Weight = w.Weight,
-                UpdatedAt = w.UpdatedAt,
-            })
-            .ToListAsync(ct);
-
-        return TypedResults.Ok(new SetTypeWeightListResponse { Weights = weights });
-    }
+    public async Task<Ok<SetTypeWeightListResponse>> ListAsync(CancellationToken ct) =>
+        TypedResults.Ok(await _service.ListAsync(ct));
 
     public async Task<Results<Ok<SetTypeWeightResponse>, ProblemHttpResult>> UpsertAsync(
         string setType,
@@ -47,31 +31,6 @@ public sealed class SetTypeWeightHandler
             return Problems.BadRequest("weight must be a finite non-negative number.");
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var existing = await _db.SetTypeWeights.FindAsync(new object?[] { canonical }, ct);
-        if (existing is null)
-        {
-            existing = new SetTypeWeight
-            {
-                SetType = canonical,
-                Weight = request.Weight,
-                UpdatedAt = now,
-            };
-            _db.SetTypeWeights.Add(existing);
-        }
-        else
-        {
-            existing.Weight = request.Weight;
-            existing.UpdatedAt = now;
-        }
-
-        await _db.SaveChangesAsync(ct);
-
-        return TypedResults.Ok(new SetTypeWeightResponse
-        {
-            SetType = existing.SetType,
-            Weight = existing.Weight,
-            UpdatedAt = existing.UpdatedAt,
-        });
+        return TypedResults.Ok(await _service.UpsertAsync(canonical, request.Weight, ct));
     }
 }

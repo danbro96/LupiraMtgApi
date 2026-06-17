@@ -1,30 +1,17 @@
-using System.Diagnostics;
-using LupiraMtgApi.Models;
-using LupiraMtgApi.Models.Scans;
-using LupiraMtgApi.Services.Recognition;
-using LupiraMtgApi.Services.Recognition.Pipeline;
+using LupiraMtgApi.Recognition.Application;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.Extensions.Options;
 
 namespace LupiraMtgApi.Handlers;
 
 /// <summary>
-/// Thin orchestrator. Validates the upload, builds the initial <see cref="ScanContext"/>,
-/// delegates to <see cref="ScanPipeline"/> for the actual recognition work, then shapes
-/// the final context into a <see cref="ScanResponse"/>. All the imaging / matching /
-/// scoring / persistence logic lives in step classes under
-/// <c>Services/Recognition/Steps/</c>; this handler doesn't know how recognition works.
+/// Thin transport adapter over <see cref="ScanService"/>: validates the upload, buffers the bytes,
+/// resolves the (optional) owner from the bearer token, and delegates recognition to the service.
 /// </summary>
 public sealed class ScanHandler
 {
-    private readonly ScanPipeline _pipeline;
-    private readonly ScanScoringOptions _scoring;
+    private readonly ScanService _service;
 
-    public ScanHandler(ScanPipeline pipeline, IOptions<ScanScoringOptions> scoring)
-    {
-        _pipeline = pipeline;
-        _scoring = scoring.Value;
-    }
+    public ScanHandler(ScanService service) => _service = service;
 
     public async Task<Results<Ok<ScanResponse>, ProblemHttpResult>> ScanAsync(
         HttpContext httpContext,
@@ -36,9 +23,9 @@ public sealed class ScanHandler
             return Problems.BadRequest("Image file is required.");
         }
 
-        if (image.Length > _scoring.MaxImageBytes)
+        if (image.Length > _service.MaxImageBytes)
         {
-            return Problems.BadRequest($"Image is too large; max {_scoring.MaxImageBytes} bytes.");
+            return Problems.BadRequest($"Image is too large; max {_service.MaxImageBytes} bytes.");
         }
 
         byte[] imageBytes;
@@ -48,73 +35,10 @@ public sealed class ScanHandler
             imageBytes = ms.ToArray();
         }
 
-        var inputMediaType = string.IsNullOrEmpty(image.ContentType) ? "image/jpeg" : image.ContentType;
-        var scanId = Guid.NewGuid();
-        var scannedAt = DateTimeOffset.UtcNow;
+        var mediaType = string.IsNullOrEmpty(image.ContentType) ? "image/jpeg" : image.ContentType;
+        Guid? ownerId = httpContext.TryGetOwnerId(out var oid) ? oid : null;
 
-        var hasOwner = httpContext.TryGetOwnerId(out var ownerId);
-
-        var scanStopwatch = Stopwatch.StartNew();
-        using var rootSpan = ScanTelemetry.Source.StartActivity("scan");
-        rootSpan?.SetTag("scan.id", scanId);
-        rootSpan?.SetTag("scan.owner_id", hasOwner ? ownerId.ToString() : "anon");
-        rootSpan?.SetTag("scan.image_bytes", imageBytes.Length);
-        rootSpan?.SetTag("scan.media_type", inputMediaType);
-
-        var initialContext = new ScanContext
-        {
-            ScanId = scanId,
-            ScannedAt = scannedAt,
-            OwnerId = hasOwner ? ownerId : null,
-            OriginalBytes = imageBytes,
-            MediaType = inputMediaType,
-            ScanStopwatch = scanStopwatch,
-            RootSpan = rootSpan,
-        };
-
-        var ctx = await _pipeline.ExecuteAsync(initialContext, ct);
-
-        return TypedResults.Ok(BuildResponse(ctx));
+        var response = await _service.ScanAsync(imageBytes, mediaType, ownerId, ct);
+        return TypedResults.Ok(response);
     }
-
-    private static ScanResponse BuildResponse(ScanContext ctx) => new()
-    {
-        ScanId = ctx.ScanId,
-        Confidence = ctx.Confidence,
-        Candidates = ctx.Ranked,
-        Debug = new ScanDebug
-        {
-            Zones = new ScanZoneTexts
-            {
-                Name = ctx.Zones.Name,
-                TypeLine = ctx.Zones.TypeLine,
-                RulesText = ctx.Zones.RulesText,
-                PowerToughness = ctx.Zones.PowerToughness,
-                BottomMetadata = ctx.Zones.BottomMetadata,
-                NameConfidence = ctx.Zones.NameConfidence,
-                TypeLineConfidence = ctx.Zones.TypeLineConfidence,
-                RulesTextConfidence = ctx.Zones.RulesTextConfidence,
-                PowerToughnessConfidence = ctx.Zones.PowerToughnessConfidence,
-                BottomMetadataConfidence = ctx.Zones.BottomMetadataConfidence,
-            },
-            SetSymbol = ctx.SymbolMatch is null ? null : new ScanSetSymbol
-            {
-                SetCode = ctx.SymbolMatch.SetCode,
-                HammingDistance = ctx.SymbolMatch.HammingDistance,
-                Score = ctx.SymbolMatch.Score,
-            },
-            ImagePHash = ctx.ImageHash,
-            IsCropped = ctx.Preprocessed?.IsCropped ?? false,
-            CropConfidence = ctx.Preprocessed?.CropConfidence ?? 0.0,
-            CropRotated = ctx.Preprocessed?.Rotated ?? false,
-            RotationRetried = ctx.RotationRetried,
-            CroppedWidth = ctx.Preprocessed?.Width ?? 0,
-            CroppedHeight = ctx.Preprocessed?.Height ?? 0,
-            OcrRegionCount = ctx.Regions.Regions.Count,
-            PHashCandidateCount = ctx.PHashHits.Count,
-            OcrCandidateCount = ctx.ZoneScoring?.ByPrinting.Count ?? 0,
-            OcrLatencyMs = ctx.OcrLatencyMs,
-            PHashLatencyMs = ctx.PHashLatencyMs,
-        },
-    };
 }

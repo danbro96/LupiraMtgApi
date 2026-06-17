@@ -1,5 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/LupiraMtgApi.Catalog/LupiraMtgApi.Catalog.csproj" />
+    <Project Path="src/LupiraMtgApi.Recognition/LupiraMtgApi.Recognition.csproj" />
+    <Project Path="src/LupiraMtgApi.Collections/LupiraMtgApi.Collections.csproj" />
     <Project Path="src/LupiraMtgApi/LupiraMtgApi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LupiraMtgApi.Tests/LupiraMtgApi.Tests.csproj" />
   </Folder>
 </Solution>

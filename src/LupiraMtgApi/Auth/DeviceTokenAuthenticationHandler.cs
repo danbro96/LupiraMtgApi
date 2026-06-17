@@ -1,4 +1,4 @@
-using LupiraMtgApi.Data;
+using LupiraMtgApi.Catalog.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
