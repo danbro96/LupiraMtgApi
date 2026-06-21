@@ -2,6 +2,7 @@ using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Dtos.Cards;
 using LupiraMtgApi.Catalog.Mappers;
+using LupiraMtgApi.Pricing.Application;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -14,11 +15,13 @@ public sealed class CardCatalogService
 
     private readonly LupiraMtgDbContext _db;
     private readonly CardPrintingMapper _mapper;
+    private readonly CardPriceLookup _prices;
 
-    public CardCatalogService(LupiraMtgDbContext db, CardPrintingMapper mapper)
+    public CardCatalogService(LupiraMtgDbContext db, CardPrintingMapper mapper, CardPriceLookup prices)
     {
         _db = db;
         _mapper = mapper;
+        _prices = prices;
     }
 
     public async Task<CardListResponse> ListCardsAsync(CardListRequest query, CancellationToken ct)
@@ -155,11 +158,13 @@ public sealed class CardCatalogService
             return string.CompareOrdinal(a.CollectorNumber, b.CollectorNumber);
         });
 
+        var prices = await _prices.GetAsync(printings.Select(p => p.Id), ct);
+
         var results = new List<CardPrintingResponse>(printings.Count);
         foreach (var printing in printings)
         {
             var setName = sets.TryGetValue(printing.SetCode, out var s) ? s.Name : printing.SetCode;
-            results.Add(await _mapper.MapAsync(printing, setName, ct));
+            results.Add(await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct));
         }
 
         return new CardPrintingListResponse { Results = results };
@@ -185,7 +190,8 @@ public sealed class CardCatalogService
             .Select(s => s.Name)
             .FirstOrDefaultAsync(ct) ?? printing.SetCode;
 
-        var response = await _mapper.MapAsync(printing, setName, ct);
+        var prices = await _prices.GetAsync(new[] { printing.Id }, ct);
+        var response = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
         return response;
     }
 

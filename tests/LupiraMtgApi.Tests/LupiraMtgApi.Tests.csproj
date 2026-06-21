@@ -13,12 +13,15 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!-- In-memory SQLite for Pricing context logic tests (store-on-change, lookup) — no Postgres required. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LupiraMtgApi.Catalog\LupiraMtgApi.Catalog.csproj" />
     <ProjectReference Include="..\..\src\LupiraMtgApi.Recognition\LupiraMtgApi.Recognition.csproj" />
     <ProjectReference Include="..\..\src\LupiraMtgApi.Collections\LupiraMtgApi.Collections.csproj" />
+    <ProjectReference Include="..\..\src\LupiraMtgApi.Pricing\LupiraMtgApi.Pricing.csproj" />
   </ItemGroup>
 
 </Project>

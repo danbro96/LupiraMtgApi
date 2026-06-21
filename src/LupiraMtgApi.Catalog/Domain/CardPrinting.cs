@@ -29,8 +29,6 @@ public sealed class CardPrinting
     // the lower hamming distance per candidate printing.
     public long? FullCardPHash { get; set; }
 
-    public Dictionary<string, decimal>? Prices { get; set; }
-
     public DateTimeOffset SyncedAt { get; set; }
 
     public string? Supertype { get; set; }

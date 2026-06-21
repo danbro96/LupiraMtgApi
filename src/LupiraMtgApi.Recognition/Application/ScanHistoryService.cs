@@ -3,6 +3,7 @@ using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Dtos.Cards;
 using LupiraMtgApi.Catalog.Infrastructure.Storage;
 using LupiraMtgApi.Catalog.Mappers;
+using LupiraMtgApi.Pricing.Application;
 using LupiraMtgApi.Recognition.Dtos;
 using Marten;
 using Microsoft.EntityFrameworkCore;
@@ -24,17 +25,20 @@ public sealed class ScanHistoryService
     private readonly LupiraMtgDbContext _db;
     private readonly CardPrintingMapper _mapper;
     private readonly IImageStore _images;
+    private readonly CardPriceLookup _prices;
 
     public ScanHistoryService(
         IDocumentSession session,
         LupiraMtgDbContext db,
         CardPrintingMapper mapper,
-        IImageStore images)
+        IImageStore images,
+        CardPriceLookup prices)
     {
         _session = session;
         _db = db;
         _mapper = mapper;
         _images = images;
+        _prices = prices;
     }
 
     public async Task<ScanListResponse> ListAsync(Guid ownerId, int? take, int? skip, CancellationToken ct)
@@ -73,6 +77,8 @@ public sealed class ScanHistoryService
                 .Where(s => printingsById.Values.Select(p => p.SetCode).Contains(s.Code))
                 .ToDictionaryAsync(s => s.Code, s => s.Name, ct);
 
+        var prices = await _prices.GetAsync(printingsById.Keys, ct);
+
         var results = new List<ScanSummaryResponse>(docs.Count);
         foreach (var doc in docs)
         {
@@ -81,7 +87,7 @@ public sealed class ScanHistoryService
             if (topCandidate is not null && printingsById.TryGetValue(topCandidate.PrintingId, out var printing))
             {
                 var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-                topMatch = await _mapper.MapAsync(printing, setName, ct);
+                topMatch = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
             }
 
             results.Add(new ScanSummaryResponse
@@ -124,6 +130,8 @@ public sealed class ScanHistoryService
                 .Where(s => printingsById.Values.Select(p => p.SetCode).Contains(s.Code))
                 .ToDictionaryAsync(s => s.Code, s => s.Name, ct);
 
+        var prices = await _prices.GetAsync(printingsById.Keys, ct);
+
         var candidates = new List<CardCandidateResponse>(doc.Candidates.Count);
         foreach (var c in doc.Candidates)
         {
@@ -135,7 +143,7 @@ public sealed class ScanHistoryService
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
             candidates.Add(new CardCandidateResponse
             {
-                Printing = await _mapper.MapAsync(printing, setName, ct),
+                Printing = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct),
                 CombinedScore = c.CombinedScore,
                 OcrAggregateScore = c.OcrAggregateScore,
                 NameScore = c.NameScore,

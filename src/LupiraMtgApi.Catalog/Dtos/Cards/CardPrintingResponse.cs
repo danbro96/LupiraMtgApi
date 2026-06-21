@@ -1,3 +1,5 @@
+using LupiraMtgApi.Pricing.Dtos;
+
 namespace LupiraMtgApi.Catalog.Dtos.Cards;
 
 public sealed class CardPrintingResponse
@@ -24,7 +26,7 @@ public sealed class CardPrintingResponse
 
     public CardImageUrls? Images { get; set; }
 
-    public Dictionary<string, decimal>? Prices { get; set; }
+    public CardPriceResponse? Prices { get; set; }
 
     // Multi-faced card data — null for normal single-faced cards. Each face has its own
     // name, type line, oracle text, P/T, and (when applicable) a presigned image. Front

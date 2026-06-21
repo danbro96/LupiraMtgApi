@@ -1,5 +1,6 @@
 using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Catalog.Mappers;
+using LupiraMtgApi.Pricing.Application;
 using LupiraMtgApi.Recognition.Application.Pipeline;
 using LupiraMtgApi.Recognition.Dtos;
 using Microsoft.EntityFrameworkCore;
@@ -19,11 +20,13 @@ public sealed class HydrateStep : IScanStep
 {
     private readonly LupiraMtgDbContext _db;
     private readonly CardPrintingMapper _mapper;
+    private readonly CardPriceLookup _prices;
 
-    public HydrateStep(LupiraMtgDbContext db, CardPrintingMapper mapper)
+    public HydrateStep(LupiraMtgDbContext db, CardPrintingMapper mapper, CardPriceLookup prices)
     {
         _db = db;
         _mapper = mapper;
+        _prices = prices;
     }
 
     public string Name => "hydrate";
@@ -51,6 +54,8 @@ public sealed class HydrateStep : IScanStep
             .Where(s => setCodes.Contains(s.Code))
             .ToDictionaryAsync(s => s.Code, s => s.Name, ct);
 
+        var prices = await _prices.GetAsync(printings.Select(p => p.Id), ct);
+
         var ranked = new List<CardCandidateResponse>(ctx.TopRanked.Count);
         var hydratedRows = new List<RankedCandidate>(ctx.TopRanked.Count);
 
@@ -62,7 +67,7 @@ public sealed class HydrateStep : IScanStep
             }
 
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-            var printingResponse = await _mapper.MapAsync(printing, setName, ct);
+            var printingResponse = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
 
             ranked.Add(new CardCandidateResponse
             {

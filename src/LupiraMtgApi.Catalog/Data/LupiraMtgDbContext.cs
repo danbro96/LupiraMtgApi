@@ -38,7 +38,6 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(p => p.CollectorNumber).HasMaxLength(16);
             e.Property(p => p.Rarity).HasMaxLength(16);
             e.Property(p => p.ColorIdentity).HasColumnType("text[]");
-            e.Property(p => p.Prices).HasColumnType("jsonb");
             e.Property(p => p.Faces).HasColumnType("jsonb");
 
             e.Property(p => p.Supertype).HasMaxLength(64);

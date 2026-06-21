@@ -22,6 +22,7 @@
     <ProjectReference Include="..\LupiraMtgApi.Catalog\LupiraMtgApi.Catalog.csproj" />
     <ProjectReference Include="..\LupiraMtgApi.Recognition\LupiraMtgApi.Recognition.csproj" />
     <ProjectReference Include="..\LupiraMtgApi.Collections\LupiraMtgApi.Collections.csproj" />
+    <ProjectReference Include="..\LupiraMtgApi.Pricing\LupiraMtgApi.Pricing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,6 +59,7 @@
     <Using Include="LupiraMtgApi.Catalog.Dtos.Admin" />
     <Using Include="LupiraMtgApi.Recognition.Dtos" />
     <Using Include="LupiraMtgApi.Collections.Dtos" />
+    <Using Include="LupiraMtgApi.Pricing.Dtos" />
   </ItemGroup>
 
 </Project>

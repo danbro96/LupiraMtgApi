@@ -782,6 +782,61 @@
         ]
       }
     },
+    "/cards/{oracleId}/printings/{printingId}/prices": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Get the EUR price history of a printing.",
+        "description": "Returns the daily price history for a printing (store-on-change: a point exists only\r\nfor days the price moved), oldest first, clamped to the configured retention window.\r\nOptional `from`/`to` query params (`yyyy-MM-dd`) narrow the range. Returns 404 when no\r\nprice points have been recorded for the printing.",
+        "parameters": [
+          {
+            "name": "printingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardPriceHistoryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/sets": {
       "get": {
         "tags": [
@@ -2252,6 +2307,84 @@
           }
         }
       },
+      "CardPriceHistoryResponse": {
+        "required": [
+          "printingId",
+          "points"
+        ],
+        "type": "object",
+        "properties": {
+          "printingId": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardPricePointResponse"
+            }
+          }
+        }
+      },
+      "CardPricePointResponse": {
+        "required": [
+          "observedOn"
+        ],
+        "type": "object",
+        "properties": {
+          "observedOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "eur": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "eurFoil": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "CardPriceResponse": {
+        "type": "object",
+        "properties": {
+          "eur": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "eurFoil": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "CardPrintingListResponse": {
         "required": [
           "results"
@@ -2332,18 +2465,14 @@
             ]
           },
           "prices": {
-            "type": [
-              "null",
-              "object"
-            ],
-            "additionalProperties": {
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-              "type": [
-                "number",
-                "string"
-              ],
-              "format": "double"
-            }
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CardPriceResponse"
+              }
+            ]
           },
           "faces": {
             "type": [

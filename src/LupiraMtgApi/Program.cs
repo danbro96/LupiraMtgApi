@@ -11,6 +11,7 @@ using LupiraMtgApi.Endpoints.Scans;
 using LupiraMtgApi.Endpoints.Selections;
 using LupiraMtgApi.Endpoints.Sets;
 using LupiraMtgApi.Handlers;
+using LupiraMtgApi.Pricing.Data;
 using LupiraMtgApi.Recognition.Data;
 using LupiraMtgApi.Sync;
 using Marten;
@@ -61,8 +62,8 @@ builder.Services
     .UseLightweightSessions();
 
 // Build the EF data source explicitly so we can enable dynamic JSON — required
-// to write Dictionary<string, decimal> (CardPrinting.Prices) into a jsonb column
-// under Npgsql 8+, which otherwise refuses to serialize unmapped complex types.
+// to (de)serialize List<CardFace> (CardPrinting.Faces) against a jsonb column
+// under Npgsql 8+, which otherwise refuses to handle unmapped complex types.
 var efDataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
 efDataSourceBuilder.EnableDynamicJson();
 var efDataSource = efDataSourceBuilder.Build();
@@ -75,6 +76,16 @@ builder.Services.AddDbContext<LupiraMtgDbContext>(opts =>
     });
 });
 
+// Pricing context — typed decimal columns (no jsonb), so a plain connection is enough; its own
+// migrations chain lives in the `prices` schema, separate from Catalog's `cards.__EFMigrationsHistory`.
+builder.Services.AddDbContext<PricingDbContext>(opts =>
+{
+    opts.UseNpgsql(connectionString, npgsql =>
+    {
+        npgsql.MigrationsHistoryTable("__EFMigrationsHistory", PricingDbContext.Schema);
+    });
+});
+
 // Liveness (/livez) + readiness (/readyz, pings Postgres) probes.
 builder.Services.AddAppHealthChecks();
 
@@ -82,6 +93,7 @@ builder.Services.AddAppHealthChecks();
 builder.Services.AddCatalog(builder.Configuration);
 builder.Services.AddRecognition(builder.Configuration);
 builder.Services.AddCollections();
+builder.Services.AddPricing(builder.Configuration);
 
 // Cross-context Scryfall sync orchestration lives in the host (it writes Catalog data + images and
 // rebuilds Recognition's indexes, so it sits above both contexts).
@@ -91,6 +103,7 @@ builder.Services.AddHostedService<ScryfallSyncJob>();
 
 // Host transport adapters (thin) over the context Application services.
 builder.Services.AddScoped<CardCatalogHandler>();
+builder.Services.AddScoped<CardPriceHistoryHandler>();
 builder.Services.AddScoped<SetsHandler>();
 builder.Services.AddScoped<SetTypeWeightHandler>();
 builder.Services.AddScoped<ScanHandler>();
@@ -225,6 +238,8 @@ if (applySchema)
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<LupiraMtgDbContext>();
     await db.Database.MigrateAsync();
+    var pricingDb = scope.ServiceProvider.GetRequiredService<PricingDbContext>();
+    await pricingDb.Database.MigrateAsync();
     var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
     await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
     return;
@@ -236,6 +251,8 @@ if (!isOpenApiBuild && app.Environment.IsDevelopment())
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<LupiraMtgDbContext>();
     await db.Database.MigrateAsync();
+    var pricingDb = scope.ServiceProvider.GetRequiredService<PricingDbContext>();
+    await pricingDb.Database.MigrateAsync();
 }
 
 if (allowedOrigins.Length > 0) app.UseCors();

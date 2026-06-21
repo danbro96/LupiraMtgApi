@@ -91,6 +91,24 @@ public static class CardsEndpoints
             .Produces<CardPrintingResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapGet("/{oracleId}/printings/{printingId}/prices", (
+                string printingId,
+                DateOnly? from,
+                DateOnly? to,
+                CardPriceHistoryHandler handler,
+                CancellationToken ct) =>
+            handler.GetHistoryAsync(printingId, from, to, ct))
+            .WithSummary("Get the EUR price history of a printing.")
+            .WithDescription(
+                """
+                Returns the daily price history for a printing (store-on-change: a point exists only
+                for days the price moved), oldest first, clamped to the configured retention window.
+                Optional `from`/`to` query params (`yyyy-MM-dd`) narrow the range. Returns 404 when no
+                price points have been recorded for the printing.
+                """)
+            .Produces<CardPriceHistoryResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 }

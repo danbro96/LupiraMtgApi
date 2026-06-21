@@ -16,6 +16,12 @@
     <Using Include="System.Net.Http.Json" />
   </ItemGroup>
 
+  <!-- Catalog hydrates card responses with the latest price; Pricing is a leaf context
+       (EF + Npgsql only), so this reference is acyclic. -->
+  <ItemGroup>
+    <ProjectReference Include="..\LupiraMtgApi.Pricing\LupiraMtgApi.Pricing.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">

@@ -3,6 +3,7 @@ using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Infrastructure.Scryfall;
 using LupiraMtgApi.Catalog.Infrastructure.Storage;
 using LupiraMtgApi.Models.Sync;
+using LupiraMtgApi.Pricing.Application;
 using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,10 @@ public sealed class ScryfallSyncRunner
     private static readonly Counter<long> ImagesUploadedCounter = SyncMeter.CreateCounter<long>("scryfall.sync.images.uploaded.total");
     private static readonly Counter<long> IconRasterFailureCounter = SyncMeter.CreateCounter<long>("scryfall.sync.icons.failures.total");
     private static readonly Counter<long> SyncFailureCounter = SyncMeter.CreateCounter<long>("scryfall.sync.failures.total");
+
+    // Provenance stamped on price points this sync writes — the host knows the feed; the Pricing
+    // context does not assume one.
+    private const string PriceSource = "scryfall";
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ScryfallSyncOptions _options;
@@ -69,6 +74,7 @@ public sealed class ScryfallSyncRunner
             var symbolRasterizer = scope.ServiceProvider.GetRequiredService<SetSymbolRasterizer>();
             var symbolIndex = scope.ServiceProvider.GetRequiredService<SetSymbolIndex>();
             var fullCardPHashIndex = scope.ServiceProvider.GetRequiredService<FullCardPHashIndex>();
+            var priceIngest = scope.ServiceProvider.GetRequiredService<PriceIngestService>();
 
             await images.EnsureBucketAsync(ct);
 
@@ -93,7 +99,7 @@ public sealed class ScryfallSyncRunner
             using (var printingsSpan = SyncActivity.StartActivity("scryfall.sync.printings"))
             {
                 var sw = Stopwatch.StartNew();
-                await this.SyncPrintingsAsync(db, source, images, pHash, report, ct);
+                await this.SyncPrintingsAsync(db, source, images, pHash, priceIngest, report, ct);
                 sw.Stop();
                 PrintingsPhaseHist.Record(sw.Elapsed.TotalMilliseconds);
                 printingsSpan?.SetTag("printings.total", report.PrintingsTotal);
@@ -301,12 +307,14 @@ public sealed class ScryfallSyncRunner
         ICardCatalogSource source,
         IImageStore images,
         PHashService pHash,
+        PriceIngestService priceIngest,
         SyncRunResponse report,
         CancellationToken ct)
     {
         var entry = await source.GetDefaultCardsBulkEntryAsync(ct);
         var now = DateTimeOffset.UtcNow;
-        var batch = new List<CardPrinting>(_options.BatchSize);
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var priceBatch = new List<PriceObservation>(_options.BatchSize);
 
         await foreach (var dto in source.StreamCardsAsync(entry.DownloadUri, ct))
         {
@@ -337,8 +345,14 @@ public sealed class ScryfallSyncRunner
             entity.CollectorNumber = dto.CollectorNumber;
             entity.ColorIdentity = dto.ColorIdentity;
             entity.Rarity = dto.Rarity;
-            entity.Prices = MapPrices(dto.Prices);
             entity.SyncedAt = now;
+
+            priceBatch.Add(new PriceObservation
+            {
+                PrintingId = dto.Id,
+                Eur = ParseDecimal(dto.Prices?.Eur),
+                EurFoil = ParseDecimal(dto.Prices?.EurFoil),
+            });
 
             ApplyFaceFields(entity, dto);
             entity.Faces = BuildFaces(dto, entity.Faces);
@@ -470,6 +484,8 @@ public sealed class ScryfallSyncRunner
             if (report.PrintingsTotal % _options.BatchSize == 0)
             {
                 await db.SaveChangesAsync(ct);
+                await priceIngest.IngestBatchAsync(priceBatch, today, PriceSource, ct);
+                priceBatch.Clear();
                 _logger.LogInformation(
                     "Sync progress: {Total} processed ({Added} added, {Updated} updated)",
                     report.PrintingsTotal,
@@ -484,6 +500,10 @@ public sealed class ScryfallSyncRunner
         }
 
         await db.SaveChangesAsync(ct);
+        if (priceBatch.Count > 0)
+        {
+            await priceIngest.IngestBatchAsync(priceBatch, today, PriceSource, ct);
+        }
     }
 
     private static async Task UploadImageAsync(
@@ -590,26 +610,6 @@ public sealed class ScryfallSyncRunner
         entity.IsFoil = dto.IsFoil;
     }
 
-    private static Dictionary<string, decimal>? MapPrices(ScryfallPrices? prices)
-    {
-        if (prices is null)
-        {
-            return null;
-        }
-
-        var result = new Dictionary<string, decimal>(4);
-        Add(result, "usd", prices.Usd);
-        Add(result, "usd_foil", prices.UsdFoil);
-        Add(result, "eur", prices.Eur);
-        Add(result, "eur_foil", prices.EurFoil);
-        return result.Count == 0 ? null : result;
-    }
-
-    private static void Add(Dictionary<string, decimal> target, string key, string? value)
-    {
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d))
-        {
-            target[key] = d;
-        }
-    }
+    private static decimal? ParseDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
 }

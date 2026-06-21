@@ -1,6 +1,7 @@
 using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Dtos.Cards;
 using LupiraMtgApi.Catalog.Infrastructure.Storage;
+using LupiraMtgApi.Pricing.Dtos;
 namespace LupiraMtgApi.Catalog.Mappers;
 
 public sealed class CardPrintingMapper
@@ -31,7 +32,11 @@ public sealed class CardPrintingMapper
         return imageUrls;
     }
 
-    public async Task<CardPrintingResponse> MapAsync(CardPrinting printing, string setName, CancellationToken ct)
+    public async Task<CardPrintingResponse> MapAsync(
+        CardPrinting printing,
+        string setName,
+        CardPriceResponse? price,
+        CancellationToken ct)
     {
         var imageUrls = await MapImagesAsync(printing, ct);
         var faces = await MapFacesAsync(printing.Faces, ct);
@@ -49,7 +54,7 @@ public sealed class CardPrintingMapper
             ManaCost = printing.ManaCost,
             Cmc = printing.Cmc,
             Images = imageUrls,
-            Prices = printing.Prices,
+            Prices = price,
             Faces = faces,
         };
     }

@@ -8,29 +8,34 @@ identity/ownership model, the recognition pipeline, and how internal results map
 
 ## Bounded contexts
 
-The solution is four projects: three context **class libraries** plus a thin ASP.NET **host**. None
+The solution is five projects: four context **class libraries** plus a thin ASP.NET **host**. None
 of the libraries reference ASP.NET — the boundary is compiler-enforced (a library physically cannot
 take a dependency on `Microsoft.AspNetCore.*`), which keeps transport concerns in the host.
 
 | Project | Role | Owns |
 |---|---|---|
-| `LupiraMtgApi.Catalog` | Base context | MTG reference data (EF Core, `cards`/`auth` schemas), the Scryfall source client, object-storage abstraction (`IImageStore`) |
+| `LupiraMtgApi.Pricing` | Leaf context | Card market EUR prices (EF Core, `prices` schema): latest snapshot + store-on-change daily history. Depends only on EF + Npgsql |
+| `LupiraMtgApi.Catalog` | → Pricing | MTG reference data (EF Core, `cards`/`auth` schemas), the Scryfall source client, object-storage abstraction (`IImageStore`); reads Pricing to hydrate price into card responses |
 | `LupiraMtgApi.Recognition` | → Catalog | The scan/detection engine and scan logs; **all** the heavy CV dependencies (SkiaSharp, ImageSharp, OCR client) are isolated here |
 | `LupiraMtgApi.Collections` | → Catalog | Per-user state (Marten `users` schema): collections, selections, profiles |
-| `LupiraMtgApi` (host) | → all three | `Program.cs`, `Endpoints/`, thin `Handlers/`, `Auth/`, and the cross-context Scryfall `Sync/` |
+| `LupiraMtgApi` (host) | → all four | `Program.cs`, `Endpoints/`, thin `Handlers/`, `Auth/`, and the cross-context Scryfall `Sync/` |
 
-Dependency direction: `Collections → Catalog`, `Recognition → Catalog`, `host → all three`. Each
-library uses the same internal folders — `Domain` / `Application` / `Infrastructure` / `Data` /
-`Dtos` / `Mappers`.
+Dependency direction: `Catalog → Pricing`, `Collections → Catalog`, `Recognition → Catalog`,
+`host → all four`. Each library uses the same internal folders — `Domain` / `Application` /
+`Infrastructure` / `Data` / `Dtos` / `Mappers`.
 
-Two placement decisions are deliberate:
+Three placement decisions are deliberate:
 
 - **Object storage lives in Catalog**, not a separate kernel. Recognition gets `IImageStore`
-  transitively. The single shared `LupiraMtgDbContext` is also owned by Catalog; the other projects
-  inject it directly (modular monolith, one EF migration chain).
-- **The Scryfall sync lives in the host**, not Catalog. It both writes Catalog data *and* uses
-  Recognition's perceptual-hash / set-symbol rasterizer to rebuild Recognition's indexes — so it
-  spans both contexts and cannot sit in the base Catalog without a cycle.
+  transitively. The shared `LupiraMtgDbContext` (`cards`/`auth`) is also owned by Catalog; the other
+  projects inject it directly (modular monolith, one EF migration chain).
+- **Pricing is a leaf with its own `PricingDbContext`** (`prices` schema, separate migration chain).
+  It is **source-agnostic**: ingest provenance is supplied per call by the caller, not assumed —
+  today the Scryfall sync feeds it EUR; a future MTGJSON/Cardmarket feed could call the same ingest.
+  Its own DbContext also makes a later physical-DB split a connection-string change, not a refactor.
+- **The Scryfall sync lives in the host**, not Catalog. It writes Catalog data, feeds Pricing's
+  ingest, *and* uses Recognition's perceptual-hash / set-symbol rasterizer to rebuild Recognition's
+  indexes — so it spans contexts and cannot sit in the base Catalog without a cycle.
 
 ## Persistence
 
@@ -41,20 +46,27 @@ data; Marten owns mutable user/diagnostic state.
 |---|---|---|
 | `cards` | EF Core | `card_printings`, `sets`, `set_type_weights` |
 | `auth` | EF Core | `devices` |
+| `prices` | EF Core | `card_prices_latest`, `card_price_points` |
 | `users` | Marten | `CollectionDocument`, `SelectionDocument`, `UserProfileDocument` |
 | `diagnostics` | Marten | `ScanLogDocument` |
+
+`cards`/`auth` belong to `LupiraMtgDbContext`; `prices` to `PricingDbContext` — two EF contexts, two
+migration chains (each with its own `__EFMigrationsHistory` in its schema), one database.
 
 Notable EF mapping details:
 
 - `card_printings.TypeLineFull` is a Postgres `GENERATED ALWAYS AS … STORED` column recomposed from
   `Supertype`/`Type`/`Subtype`. Don't write it directly — Postgres rejects the write.
 - `pg_trgm` GIN indexes back fuzzy search on `Name`, `TypeLineFull`, and `RulesText`.
-- `Prices` and `Faces` are `jsonb`; `ColorIdentity` is a Postgres `text[]`.
+- `Faces` is `jsonb`; `ColorIdentity` is a Postgres `text[]`.
+- `card_price_points` is keyed `(PrintingId, ObservedOn)` and written store-on-change — a row exists
+  only for days a printing's price actually moved, keeping the history table sparse.
 
-**Schema control.** Development auto-applies EF migrations and lets Marten create/update its schema
-on boot. Production sets Marten `AutoCreate.None` and does not migrate on boot — schema is applied
-deliberately in one shot with `dotnet run --project src/LupiraMtgApi -- --apply-schema` (EF
-`MigrateAsync` + Marten `ApplyAllConfiguredChangesToDatabaseAsync`, then process exit).
+**Schema control.** Development auto-applies EF migrations (both contexts) and lets Marten
+create/update its schema on boot. Production sets Marten `AutoCreate.None` and does not migrate on
+boot — schema is applied deliberately in one shot with `dotnet run --project src/LupiraMtgApi --
+--apply-schema` (EF `MigrateAsync` for the catalog and pricing contexts + Marten
+`ApplyAllConfiguredChangesToDatabaseAsync`, then process exit).
 
 ## Identity & ownership
 
@@ -159,7 +171,6 @@ classDiagram
       +bool IsFoil
       +long ArtPHash
       +long FullCardPHash
-      +map Prices
       +DateTimeOffset SyncedAt
     }
     class CardFace {
@@ -190,6 +201,22 @@ classDiagram
       +string DisplayName
       +DateTimeOffset CreatedAt
       +DateTimeOffset LastSeenAt
+    }
+  }
+
+  namespace Pricing {
+    class CardPriceLatest {
+      +string PrintingId
+      +decimal Eur
+      +decimal EurFoil
+      +DateTimeOffset UpdatedAt
+    }
+    class CardPricePoint {
+      +string PrintingId
+      +DateOnly ObservedOn
+      +decimal Eur
+      +decimal EurFoil
+      +string Source
     }
   }
 
@@ -281,6 +308,8 @@ classDiagram
   ScanLogDocument --> RecognitionConfidence : Confidence
 
   CardPrinting ..> ScryfallSet : SetCode
+  CardPriceLatest ..> CardPrinting : PrintingId
+  CardPricePoint ..> CardPrinting : PrintingId
   CardInstance ..> CardPrinting : PrintingId
   SelectionEntry ..> CardPrinting : PrintingId
   ScanLogCandidate ..> CardPrinting : PrintingId
@@ -294,7 +323,10 @@ Field notes (the diagram shows the substantive fields; a few are summarized):
 
 - `CardPrinting` mirrors its front face to the top-level columns for the (front-face-only)
   recognizer; `Faces` is populated only for multi-faced layouts (transform, modal DFC, split, flip,
-  adventure, meld). `Prices` is a `map<string, decimal>` (`jsonb`); image object keys
-  (`ImageObjectKey`, `ImageArtCropKey`) and set-icon keys are omitted from the diagram for brevity.
+  adventure, meld). Image object keys (`ImageObjectKey`, `ImageArtCropKey`) and set-icon keys are
+  omitted from the diagram for brevity.
+- Prices live in the **Pricing** context, not on `CardPrinting`: `CardPriceLatest` is the hot
+  per-printing snapshot surfaced on `CardPrintingResponse.Prices`; `CardPricePoint` is the
+  store-on-change history behind `GET /cards/{oracleId}/printings/{printingId}/prices`.
 - `ScanLogDocument` additionally carries per-zone OCR confidences, latency counters, crop metadata,
   and a set of `Extracted*` fields reserved for richer extractors — omitted here.

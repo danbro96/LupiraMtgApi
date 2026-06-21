@@ -3,6 +3,7 @@ using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Mappers;
 using LupiraMtgApi.Collections.Domain;
 using LupiraMtgApi.Collections.Dtos;
+using LupiraMtgApi.Pricing.Application;
 using Microsoft.EntityFrameworkCore;
 
 namespace LupiraMtgApi.Collections.Mappers;
@@ -16,11 +17,13 @@ public sealed class CardInstanceHydrator
 {
     private readonly LupiraMtgDbContext _db;
     private readonly CardPrintingMapper _mapper;
+    private readonly CardPriceLookup _prices;
 
-    public CardInstanceHydrator(LupiraMtgDbContext db, CardPrintingMapper mapper)
+    public CardInstanceHydrator(LupiraMtgDbContext db, CardPrintingMapper mapper, CardPriceLookup prices)
     {
         _db = db;
         _mapper = mapper;
+        _prices = prices;
     }
 
     public async Task<List<CardInstanceResponse>> HydrateAsync(
@@ -36,6 +39,7 @@ public sealed class CardInstanceHydrator
 
         var byPrintingId = await this.LoadPrintingsAsync(cards.Select(c => c.PrintingId), ct);
         var setNames = await this.LoadSetNamesAsync(byPrintingId.Values, ct);
+        var prices = await _prices.GetAsync(byPrintingId.Keys, ct);
 
         var result = new List<CardInstanceResponse>(cards.Count);
         foreach (var card in cards)
@@ -46,7 +50,7 @@ public sealed class CardInstanceHydrator
             }
 
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-            var printingResponse = await _mapper.MapAsync(printing, setName, ct);
+            var printingResponse = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
 
             result.Add(new CardInstanceResponse
             {
@@ -75,6 +79,7 @@ public sealed class CardInstanceHydrator
 
         var byPrintingId = await this.LoadPrintingsAsync(entries.Select(e => e.PrintingId), ct);
         var setNames = await this.LoadSetNamesAsync(byPrintingId.Values, ct);
+        var prices = await _prices.GetAsync(byPrintingId.Keys, ct);
 
         var result = new List<SelectionEntryResponse>(entries.Count);
         foreach (var entry in entries)
@@ -85,7 +90,7 @@ public sealed class CardInstanceHydrator
             }
 
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-            var printingResponse = await _mapper.MapAsync(printing, setName, ct);
+            var printingResponse = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
 
             result.Add(new SelectionEntryResponse
             {
