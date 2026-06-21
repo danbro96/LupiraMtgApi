@@ -242,6 +242,7 @@ if (applySchema)
     await pricingDb.Database.MigrateAsync();
     var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
     await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync();
+    Console.WriteLine("Schema applied.");
     return;
 }
 
