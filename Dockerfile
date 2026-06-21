@@ -1,8 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 # Copy Directory.Build.props (shared props + analyzers) and every csproj before restore so the
-# host's `dotnet restore` resolves the three context libraries it references transitively.
+# host's `dotnet restore` resolves the four context libraries it references transitively.
 COPY Directory.Build.props ./
+COPY src/LupiraMtgApi.Pricing/LupiraMtgApi.Pricing.csproj src/LupiraMtgApi.Pricing/
 COPY src/LupiraMtgApi.Catalog/LupiraMtgApi.Catalog.csproj src/LupiraMtgApi.Catalog/
 COPY src/LupiraMtgApi.Recognition/LupiraMtgApi.Recognition.csproj src/LupiraMtgApi.Recognition/
 COPY src/LupiraMtgApi.Collections/LupiraMtgApi.Collections.csproj src/LupiraMtgApi.Collections/
