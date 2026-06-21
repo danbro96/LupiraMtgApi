@@ -2,7 +2,7 @@ using LupiraMtgApi.Pricing.Application;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace LupiraMtgApi.Tests.Pricing;
+namespace LupiraMtgApi.UnitTests.Pricing;
 
 /// <summary>
 /// Covers the store-on-change contract of <see cref="PriceIngestService"/>: latest is always upserted,

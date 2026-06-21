@@ -3,7 +3,7 @@ using LupiraMtgApi.Pricing.Domain;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace LupiraMtgApi.Tests.Pricing;
+namespace LupiraMtgApi.UnitTests.Pricing;
 
 public class PriceHistoryServiceTests
 {

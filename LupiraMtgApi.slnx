@@ -7,6 +7,6 @@
     <Project Path="src/LupiraMtgApi/LupiraMtgApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/LupiraMtgApi.Tests/LupiraMtgApi.Tests.csproj" />
+    <Project Path="tests/LupiraMtgApi.UnitTests/LupiraMtgApi.UnitTests.csproj" />
   </Folder>
 </Solution>

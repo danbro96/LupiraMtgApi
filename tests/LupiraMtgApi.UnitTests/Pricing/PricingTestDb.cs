@@ -2,7 +2,7 @@ using LupiraMtgApi.Pricing.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
-namespace LupiraMtgApi.Tests.Pricing;
+namespace LupiraMtgApi.UnitTests.Pricing;
 
 /// <summary>
 /// A throwaway <see cref="PricingDbContext"/> backed by a single in-memory SQLite connection. The

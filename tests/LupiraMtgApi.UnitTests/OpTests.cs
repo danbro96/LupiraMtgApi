@@ -1,7 +1,7 @@
 using LupiraMtgApi.Collections.Application;
 using Xunit;
 
-namespace LupiraMtgApi.Tests;
+namespace LupiraMtgApi.UnitTests;
 
 /// <summary>
 /// Smoke coverage for the Collections lightweight result type. Mostly here so the test project (and

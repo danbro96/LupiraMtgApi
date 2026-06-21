@@ -2,7 +2,7 @@ using LupiraMtgApi.Pricing.Application;
 using LupiraMtgApi.Pricing.Domain;
 using Xunit;
 
-namespace LupiraMtgApi.Tests.Pricing;
+namespace LupiraMtgApi.UnitTests.Pricing;
 
 public class CardPriceLookupTests
 {
