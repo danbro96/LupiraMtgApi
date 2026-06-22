@@ -29,7 +29,7 @@ public sealed class UploadOriginalStep : IScanStep
 
     public async Task<ScanContext> ExecuteAsync(ScanContext ctx, CancellationToken ct)
     {
-        if (ctx.OwnerId is not Guid ownerId)
+        if (ctx.OwnerId is not { Length: > 0 } ownerId)
         {
             return ctx;
         }

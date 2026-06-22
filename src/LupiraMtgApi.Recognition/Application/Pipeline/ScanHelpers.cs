@@ -71,7 +71,7 @@ internal static class ScanHelpers
         return score;
     }
 
-    public static string BuildScanObjectKey(Guid ownerId, DateTimeOffset scannedAt, Guid scanId, string mediaType)
+    public static string BuildScanObjectKey(string ownerId, DateTimeOffset scannedAt, Guid scanId, string mediaType)
     {
         var ext = mediaType switch
         {
@@ -79,7 +79,10 @@ internal static class ScanHelpers
             "image/webp" => "webp",
             _ => "jpg",
         };
-        return $"scans/{ownerId:N}/{scannedAt:yyyy}/{scannedAt:MM}/{scanId:N}.{ext}";
+        // OwnerId is an OIDC subject (email); fold to a safe object-key segment. Collisions don't
+        // matter — the scanId already makes each key unique; this only groups a user's scans.
+        var owner = string.Concat(ownerId.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '_'));
+        return $"scans/{owner}/{scannedAt:yyyy}/{scannedAt:MM}/{scanId:N}.{ext}";
     }
 
     public static string? NullIfEmpty(string? value) =>

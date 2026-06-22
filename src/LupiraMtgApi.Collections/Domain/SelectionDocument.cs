@@ -4,7 +4,7 @@ public sealed class SelectionDocument
 {
     public required Guid Id { get; set; }
 
-    public required Guid OwnerId { get; set; }
+    public required string OwnerId { get; set; }
 
     public List<SelectionEntry> Cards { get; set; } = new();
 

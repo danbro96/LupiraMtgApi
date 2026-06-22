@@ -24,7 +24,7 @@ there).
 | Area | Choice |
 |---|---|
 | Runtime | .NET 10 minimal API (`net10.0`), thin endpoints → handlers |
-| Reference data | EF Core 10 + Npgsql 10 (Scryfall catalog + device records) |
+| Reference data | EF Core 10 + Npgsql 10 (Scryfall catalog) |
 | User state | [Marten](https://martendb.com) 9.8 document store on Postgres |
 | Image / hashing | SkiaSharp 3.119, SixLabors.ImageSharp 3.1, CoenM.ImageHash, Svg.Skia 5.1 |
 | Object storage | Minio 7 client (any S3-compatible store) |
@@ -41,13 +41,13 @@ and [docs/architecture.md](docs/architecture.md).
 
 ## API surface
 
-Every functional route requires a bearer token (see [Authentication](#authentication)). Only
-`POST /me/register`, the health probes, and the docs endpoints are anonymous.
+Every functional route requires an Authentik OIDC bearer token (see
+[Authentication](#authentication)). Only the catalog browse routes, the health probes, and the docs
+endpoints are anonymous.
 
 | Method | Route | Purpose |
 |---|---|---|
-| `POST` | `/me/register` | **Anonymous.** Mint a device token (`lmtg_…`), shown once |
-| `GET` · `PATCH` | `/me` | Get / update the caller's device profile |
+| `GET` | `/me` | The caller's identity (`subject`, `displayName`, `isAdmin`) |
 | `GET` | `/me/cards` | List every card the caller owns, across collections |
 | `GET` | `/me/scans` · `/me/scans/{id}` | Scan history; full detail of one scan |
 | `GET` | `/cards` | List/search functionally-distinct cards (filters, sort, paging) |
@@ -65,18 +65,23 @@ Errors are RFC 7807 `application/problem+json` (`{ type, title, detail, status }
 
 ## Authentication
 
-A lightweight **device-token** scheme — there is no external identity provider wired in.
+**Authentik OIDC** (the platform IdP at `auth.lupira.com`). The API is a pure resource server: it
+validates the JWT access token's signature/issuer/audience/lifetime against the provider's JWKS and
+never holds a secret.
 
-1. `POST /me/register` mints a device identity (a `sub` GUID) and a 256-bit token of the form
-   `lmtg_<base64url>`. The token is returned **once**; the server stores only its SHA-256 hash.
-2. Send it on every other request:
+1. Clients (the mobile app) sign in via authorization-code + PKCE against the public `lupira-mtg`
+   provider and obtain an access token.
+2. Send it on every protected request:
 
    ```
-   Authorization: Bearer lmtg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   Authorization: Bearer <jwt>
    ```
 
-That register call is also the **local-dev on-ramp**: hit it once, copy the token, and authorize
-the Scalar UI with it. Registration is IP rate-limited to curb spam.
+The caller's identity is the token's `sub` (an email, per the provider's subject mode); `groups`
+drives admin. Configure `Auth:Authority` (the issuer) and `Auth:Audience` (`lupira-mtg`).
+
+For local-dev against the Scalar UI, paste an access token minted by Authentik for the `lupira-mtg`
+client into the **Authorize** dialog.
 
 ## Run locally
 
@@ -109,7 +114,7 @@ In **Development**, the app auto-applies EF migrations and lets Marten create it
 an empty database is fine. Then:
 
 - Open `http://localhost:8080/scalar` for the interactive docs.
-- `POST /me/register`, copy the `lmtg_…` token, and authorize.
+- Authorize with an Authentik access token minted for the `lupira-mtg` client.
 - The card catalog is empty until you run a sync (`POST /admin/sync/run`, auth required) — the first
   full sync downloads and hashes the entire Scryfall catalog and can take a long time.
 
@@ -121,8 +126,8 @@ ASP.NET `__` (double-underscore) convention for nested keys (e.g. `Minio__Bucket
 | Variable | Default | Purpose |
 |---|---|---|
 | `ConnectionStrings__Postgres` | — *(required)* | Postgres connection string; shared by EF Core and Marten |
-| `Auth__LastSeenWriteInterval` | `00:15:00` | How often a token's `LastSeenAt` is bumped (write-throttling) |
-| `Auth__AllowedOrigins` | `[]` | CORS origins; empty disables CORS |
+| `Auth__Authority` | `https://auth.lupira.com/application/o/lupira-mtg/` | Authentik OIDC issuer; JWKS is discovered from it |
+| `Auth__Audience` | `lupira-mtg` | Required token `aud` (the public client id) |
 | `Florence__Url` | — | Base URL of the OCR/vision service |
 | `Florence__ApiKey` | — | API key for the OCR/vision service |
 | `Minio__Endpoint` | — | In-network object-store endpoint for uploads (e.g. `minio:9000`) |
@@ -142,7 +147,6 @@ One Postgres database holds both stacks, separated by schema:
 | Schema | Stack | Contents |
 |---|---|---|
 | `cards` | EF Core | `card_printings`, `sets`, `set_type_weights` (Scryfall reference data) |
-| `auth` | EF Core | `devices` (hashed device tokens) |
 | `users` | Marten | collections, selections, user profiles (documents) |
 | `diagnostics` | Marten | scan logs (engineering-only) |
 

@@ -7,8 +7,6 @@ public sealed class LupiraMtgDbContext : DbContext
 {
     public const string Schema = "cards";
 
-    public const string AuthSchema = "auth";
-
     public LupiraMtgDbContext(DbContextOptions<LupiraMtgDbContext> options)
         : base(options)
     {
@@ -17,8 +15,6 @@ public sealed class LupiraMtgDbContext : DbContext
     public DbSet<CardPrinting> CardPrintings => Set<CardPrinting>();
 
     public DbSet<ScryfallSet> Sets => Set<ScryfallSet>();
-
-    public DbSet<DeviceUser> Devices => Set<DeviceUser>();
 
     public DbSet<SetTypeWeight> SetTypeWeights => Set<SetTypeWeight>();
 
@@ -85,15 +81,6 @@ public sealed class LupiraMtgDbContext : DbContext
             e.Property(s => s.Name).HasMaxLength(128);
             e.Property(s => s.SetType).HasMaxLength(32);
             e.Property(s => s.IconObjectKey).HasColumnType("text");
-        });
-
-        modelBuilder.Entity<DeviceUser>(e =>
-        {
-            e.ToTable("devices", AuthSchema);
-            e.HasKey(d => d.Id);
-            e.Property(d => d.TokenHash).HasMaxLength(64).IsRequired();
-            e.Property(d => d.DisplayName).HasMaxLength(64);
-            e.HasIndex(d => d.TokenHash).IsUnique();
         });
 
         modelBuilder.Entity<SetTypeWeight>(e =>

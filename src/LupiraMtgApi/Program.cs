@@ -1,5 +1,4 @@
 using JasperFx;
-using LupiraMtgApi.Auth;
 using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Collections.Data;
 using LupiraMtgApi.Endpoints;
@@ -15,6 +14,7 @@ using LupiraMtgApi.Pricing.Data;
 using LupiraMtgApi.Recognition.Data;
 using LupiraMtgApi.Sync;
 using Marten;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -134,9 +134,10 @@ builder.Services.AddOpenApi("v1", options =>
         {
             Type = SecuritySchemeType.Http,
             Scheme = "bearer",
+            BearerFormat = "JWT",
             Description =
-                "PoC device token from `POST /me/register`. Send as `Authorization: Bearer lmtg_<token>`. " +
-                "Replaced by Authentik OIDC tokens in the future Path C migration (see plan).",
+                "Authentik OIDC access token (authorization-code + PKCE, public client `lupira-mtg`). " +
+                "Send as `Authorization: Bearer <jwt>`.",
         };
         return Task.CompletedTask;
     });
@@ -159,13 +160,16 @@ builder.Services.AddOpenApi("v1", options =>
 });
 
 builder.Services
-    .AddAuthentication(DeviceTokenAuthOptions.SchemeName)
-    .AddScheme<DeviceTokenAuthOptions, DeviceTokenAuthenticationHandler>(
-        DeviceTokenAuthOptions.SchemeName,
-        opts =>
-        {
-            builder.Configuration.GetSection("Auth").Bind(opts);
-        });
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Authority (Authentik issuer) + Audience (the `lupira-mtg` client id) come from config;
+        // OIDC discovery off the Authority fetches the JWKS, so tokens are validated by
+        // signature/issuer/audience/lifetime out of the box.
+        builder.Configuration.GetSection("Auth").Bind(options);
+        // Keep the raw `sub`/`groups` claim names instead of remapping them to the legacy SOAP URIs.
+        options.MapInboundClaims = false;
+    });
 builder.Services.AddAuthorization();
 
 builder.Services.AddRateLimiter(o =>
@@ -273,9 +277,7 @@ app.MapGet("/", () => TypedResults.Redirect("/scalar"))
 
 app.MapAppHealthChecks(app.Environment);
 
-app.MapRegisterDevice();
 app.MapWhoAmI().RequireAuthorization();
-app.MapUpdateMe().RequireAuthorization();
 
 app.MapScan().RequireAuthorization();
 app.MapScanFeedback().RequireAuthorization();

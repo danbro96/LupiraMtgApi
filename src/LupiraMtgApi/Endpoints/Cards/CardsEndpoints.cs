@@ -92,6 +92,7 @@ public static class CardsEndpoints
             .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/{oracleId}/printings/{printingId}/prices", (
+                string oracleId,
                 string printingId,
                 DateOnly? from,
                 DateOnly? to,

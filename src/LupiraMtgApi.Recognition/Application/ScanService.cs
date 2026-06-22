@@ -23,7 +23,7 @@ public sealed class ScanService
     /// <summary>Maximum accepted upload size in bytes; the host enforces it before buffering the body.</summary>
     public long MaxImageBytes => _scoring.MaxImageBytes;
 
-    public async Task<ScanResponse> ScanAsync(byte[] imageBytes, string mediaType, Guid? ownerId, CancellationToken ct)
+    public async Task<ScanResponse> ScanAsync(byte[] imageBytes, string mediaType, string? ownerId, CancellationToken ct)
     {
         var scanId = Guid.NewGuid();
         var scannedAt = DateTimeOffset.UtcNow;
@@ -31,7 +31,7 @@ public sealed class ScanService
         var scanStopwatch = Stopwatch.StartNew();
         using var rootSpan = ScanTelemetry.Source.StartActivity("scan");
         rootSpan?.SetTag("scan.id", scanId);
-        rootSpan?.SetTag("scan.owner_id", ownerId.HasValue ? ownerId.Value.ToString() : "anon");
+        rootSpan?.SetTag("scan.owner_id", string.IsNullOrEmpty(ownerId) ? "anon" : ownerId);
         rootSpan?.SetTag("scan.image_bytes", imageBytes.Length);
         rootSpan?.SetTag("scan.media_type", mediaType);
 

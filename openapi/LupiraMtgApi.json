@@ -6,93 +6,13 @@
     "version": "v1"
   },
   "paths": {
-    "/me/register": {
-      "post": {
-        "tags": [
-          "Me"
-        ],
-        "summary": "Register a new device and mint a long-lived bearer token.",
-        "description": "Anonymous endpoint. Mints a fresh `sub` (Guid) and a 256-bit random bearer token\r\nof the form `lmtg_<base64url>`. The token is shown ONCE in the response — store it\r\nin secure storage on the device. The server stores only the SHA-256 hash of the\r\ntoken, so the plaintext cannot be recovered later.\r\n\r\nMobile apps call this on first launch and reuse the issued token from then on.\r\nIP-based rate limiting prevents registration spam.",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RegisterDeviceRequest"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegisterDeviceResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/me": {
       "get": {
         "tags": [
           "Me"
         ],
-        "summary": "Return the caller's device identity.",
-        "description": "Resolves the bearer token to its `sub` and returns the device's profile fields.\r\nUseful as a smoke test for token validity from the mobile client (sanity-check\r\nafter registration or on app cold start).",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WhoAmIResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "Me"
-        ],
-        "summary": "Update the caller's device profile.",
-        "description": "Currently only `displayName` is editable. Pass `null` or `\"\"` to clear the\r\ncurrent name. The token is unchanged — this is a profile edit, not a re-issuance.\r\nReturns the updated device profile in the same shape as `GET /me`.",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/UpdateMeRequest"
-                  }
-                ]
-              }
-            }
-          }
-        },
+        "summary": "Return the caller's identity.",
+        "description": "Projects the validated Authentik access token's claims: `subject` (the caller's\nemail — the identity that owns collections/selections/scans), `displayName` (the\n`name` claim), and `isAdmin` (derived from the `groups` claim). Useful as a token\nsanity-check from the mobile client on cold start.",
         "responses": {
           "200": {
             "description": "OK",
@@ -790,6 +710,14 @@
         "summary": "Get the EUR price history of a printing.",
         "description": "Returns the daily price history for a printing (store-on-change: a point exists only\r\nfor days the price moved), oldest first, clamped to the configured retention window.\r\nOptional `from`/`to` query params (`yyyy-MM-dd`) narrow the range. Returns 404 when no\r\nprice points have been recorded for the printing.",
         "parameters": [
+          {
+            "name": "oracleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "printingId",
             "in": "path",
@@ -2785,39 +2713,6 @@
           "High"
         ]
       },
-      "RegisterDeviceRequest": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "RegisterDeviceResponse": {
-        "required": [
-          "id",
-          "token"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "token": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "RenameCollectionRequest": {
         "required": [
           "name"
@@ -3503,17 +3398,6 @@
           }
         }
       },
-      "UpdateMeRequest": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "UpdateSetTypeWeightRequest": {
         "required": [
           "weight"
@@ -3532,13 +3416,12 @@
       },
       "WhoAmIResponse": {
         "required": [
-          "id"
+          "subject"
         ],
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+          "subject": {
+            "type": "string"
           },
           "displayName": {
             "type": [
@@ -3546,13 +3429,8 @@
               "string"
             ]
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "lastSeenAt": {
-            "type": "string",
-            "format": "date-time"
+          "isAdmin": {
+            "type": "boolean"
           }
         }
       }
@@ -3560,8 +3438,9 @@
     "securitySchemes": {
       "Bearer": {
         "type": "http",
-        "description": "PoC device token from `POST /me/register`. Send as `Authorization: Bearer lmtg_<token>`. Replaced by Authentik OIDC tokens in the future Path C migration (see plan).",
-        "scheme": "bearer"
+        "description": "Authentik OIDC access token (authorization-code + PKCE, public client `lupira-mtg`). Send as `Authorization: Bearer <jwt>`.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
     }
   },

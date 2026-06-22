@@ -23,7 +23,7 @@ public sealed class MyCardsService
         _hydrator = hydrator;
     }
 
-    public async Task<CardInstanceListResponse> ListAsync(Guid ownerId, int? take, int? skip, CancellationToken ct)
+    public async Task<CardInstanceListResponse> ListAsync(string ownerId, int? take, int? skip, CancellationToken ct)
     {
         var clampedTake = Math.Clamp(take ?? DefaultLimit, 1, MaxLimit);
         var clampedSkip = Math.Max(skip ?? 0, 0);

@@ -1,10 +1,13 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using LupiraMtgApi.Models.Auth;
 using Xunit;
 
 namespace LupiraMtgApi.IntegrationTests;
 
 /// <summary>Boot smoke: the app starts against a real Postgres (EF migrations + Marten schema applied on boot),
-/// serves health + OpenAPI anonymously, and gates protected routes behind the device-token scheme.</summary>
+/// serves health + OpenAPI anonymously, and gates protected routes behind Authentik OIDC bearer auth.</summary>
 [Collection("integration")]
 public sealed class SmokeTests(MtgApiTestFactory factory)
 {
@@ -34,5 +37,21 @@ public sealed class SmokeTests(MtgApiTestFactory factory)
     {
         var resp = await factory.CreateClient().GetAsync("/me");
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Whoami_with_a_valid_token_projects_subject_and_admin()
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", TestTokens.Create("daniel@example.com", "mtg-admins"));
+
+        var resp = await client.GetAsync("/me");
+        resp.EnsureSuccessStatusCode();
+
+        var body = await resp.Content.ReadFromJsonAsync<WhoAmIResponse>();
+        Assert.NotNull(body);
+        Assert.Equal("daniel@example.com", body!.Subject);
+        Assert.True(body.IsAdmin);
     }
 }

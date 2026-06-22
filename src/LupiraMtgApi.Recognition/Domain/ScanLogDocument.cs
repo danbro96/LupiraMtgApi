@@ -5,7 +5,7 @@ public sealed class ScanLogDocument
 {
     public Guid Id { get; set; }
 
-    public required Guid OwnerId { get; set; }
+    public required string OwnerId { get; set; }
 
     public DateTimeOffset ScannedAt { get; set; }
 

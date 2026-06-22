@@ -2,7 +2,8 @@ namespace LupiraMtgApi.Collections.Domain;
 
 public sealed class UserProfileDocument
 {
-    public required Guid Id { get; set; }
+    // The OIDC subject (email) — same identity the owned documents are keyed by.
+    public required string Id { get; set; }
 
     public string? DisplayName { get; set; }
 

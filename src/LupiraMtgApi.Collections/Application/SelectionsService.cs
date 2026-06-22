@@ -29,7 +29,7 @@ public sealed class SelectionsService
         _hydrator = hydrator;
     }
 
-    public async Task<SelectionResponse> CreateAsync(Guid ownerId, CancellationToken ct)
+    public async Task<SelectionResponse> CreateAsync(string ownerId, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var doc = new SelectionDocument
@@ -47,7 +47,7 @@ public sealed class SelectionsService
         return await this.MapAsync(doc, ct);
     }
 
-    public async Task<SelectionResponse?> GetAsync(Guid ownerId, Guid selectionId, CancellationToken ct)
+    public async Task<SelectionResponse?> GetAsync(string ownerId, Guid selectionId, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
@@ -58,7 +58,7 @@ public sealed class SelectionsService
         return await this.MapAsync(doc, ct);
     }
 
-    public async Task<Op<SelectionEntryResponse>> AddCardAsync(Guid ownerId, Guid selectionId, AddSelectionEntryRequest request, CancellationToken ct)
+    public async Task<Op<SelectionEntryResponse>> AddCardAsync(string ownerId, Guid selectionId, AddSelectionEntryRequest request, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
@@ -108,7 +108,7 @@ public sealed class SelectionsService
         return Op<SelectionEntryResponse>.Ok(hydrated.Single());
     }
 
-    public async Task<bool> RemoveCardAsync(Guid ownerId, Guid selectionId, Guid instanceId, CancellationToken ct)
+    public async Task<bool> RemoveCardAsync(string ownerId, Guid selectionId, Guid instanceId, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
@@ -127,7 +127,7 @@ public sealed class SelectionsService
         return true;
     }
 
-    public async Task<Op<CommitSelectionResponse>> CommitAsync(Guid ownerId, Guid selectionId, CommitSelectionRequest request, CancellationToken ct)
+    public async Task<Op<CommitSelectionResponse>> CommitAsync(string ownerId, Guid selectionId, CommitSelectionRequest request, CancellationToken ct)
     {
         var selection = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (selection is null)
@@ -182,7 +182,7 @@ public sealed class SelectionsService
         });
     }
 
-    private async Task<SelectionDocument?> LoadOwnedAsync(Guid id, Guid ownerId, CancellationToken ct)
+    private async Task<SelectionDocument?> LoadOwnedAsync(Guid id, string ownerId, CancellationToken ct)
     {
         var doc = await _session.LoadAsync<SelectionDocument>(id, ct);
         if (doc is null || doc.OwnerId != ownerId || doc.ExpiresAt < DateTimeOffset.UtcNow)

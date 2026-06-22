@@ -4,9 +4,11 @@ namespace LupiraMtgApi.Handlers;
 
 internal static class AuthContext
 {
-    public static bool TryGetOwnerId(this HttpContext context, out Guid ownerId)
+    // The OIDC subject (email, per the Authentik provider's subject mode) — the identity every
+    // owned Marten document is keyed by.
+    public static bool TryGetOwnerId(this HttpContext context, out string ownerId)
     {
-        var raw = context.User.FindFirstValue("sub");
-        return Guid.TryParse(raw, out ownerId);
+        ownerId = context.User.FindFirstValue("sub") ?? string.Empty;
+        return ownerId.Length > 0;
     }
 }

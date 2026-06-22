@@ -45,7 +45,6 @@ data; Marten owns mutable user/diagnostic state.
 | Schema | Stack | Tables / documents |
 |---|---|---|
 | `cards` | EF Core | `card_printings`, `sets`, `set_type_weights` |
-| `auth` | EF Core | `devices` |
 | `prices` | EF Core | `card_prices_latest`, `card_price_points` |
 | `users` | Marten | `CollectionDocument`, `SelectionDocument`, `UserProfileDocument` |
 | `diagnostics` | Marten | `ScanLogDocument` |
@@ -70,22 +69,22 @@ boot — schema is applied deliberately in one shot with `dotnet run --project s
 
 ## Identity & ownership
 
-There is no external IdP. A **device token** is the identity:
+Identity comes from **Authentik OIDC** (`auth.lupira.com`); the API is a resource server only.
 
-- `POST /me/register` mints a `DeviceUser` with a random `Id` (GUID) and a `lmtg_<base64url>` token.
-  Only the token's SHA-256 hash is stored (`auth.devices.TokenHash`, unique). The plaintext is
-  returned once and is unrecoverable thereafter.
-- On each request the `DeviceToken` auth handler hashes the presented token, looks up the device,
-  and issues a principal with `sub` = device `Id` (and `name` = `DisplayName`). It throttles
-  `LastSeenAt` writes via `Auth:LastSeenWriteInterval`.
-- Authorization is **owner-scoped**: every user document carries an `OwnerId`, and handlers resolve
-  the owner from the `sub` claim (`HttpContext.TryGetOwnerId`). A caller only ever reads/writes rows
+- `AddJwtBearer` validates each request's access token (signature/issuer/audience/lifetime) against
+  the provider's JWKS, fetched via OIDC discovery off `Auth:Authority`. No secret is stored, and
+  `MapInboundClaims` is off so `sub`/`groups` keep their raw names.
+- The `sub` claim is the caller's **email** (the provider's subject mode). `GET /me` projects the
+  token claims (`subject`, `name`, `groups`) — there is no per-user row to read.
+- Authorization is **owner-scoped**: every user document carries a `string OwnerId`, and handlers
+  resolve the owner from `sub` (`HttpContext.TryGetOwnerId`). A caller only ever reads/writes rows
   where `OwnerId == sub`. Marten indexes `OwnerId` on collections, selections, and scan logs.
-- `UserProfileDocument.Id` is the same GUID as the device `sub` — the profile is keyed by identity,
-  not a surrogate.
+- `UserProfileDocument.Id` is the same email `sub` — the profile is keyed by identity, not a
+  surrogate. (Latent: nothing reads it yet.)
 
-This is a proof-of-concept auth model: there are no roles yet, so `/admin/*` is gated only by "is
-authenticated". Tightening that is future work.
+Roles are coarse: `/admin/*` is gated only by "is authenticated"; the `groups` claim (e.g.
+`mtg-admins`) is surfaced by `/me` for the client but not yet enforced server-side. Tightening that
+is future work.
 
 ## Recognition pipeline
 
@@ -195,13 +194,6 @@ classDiagram
       +double Weight
       +DateTimeOffset UpdatedAt
     }
-    class DeviceUser {
-      +Guid Id
-      +string TokenHash
-      +string DisplayName
-      +DateTimeOffset CreatedAt
-      +DateTimeOffset LastSeenAt
-    }
   }
 
   namespace Pricing {
@@ -223,7 +215,7 @@ classDiagram
   namespace Collections {
     class CollectionDocument {
       +Guid Id
-      +Guid OwnerId
+      +string OwnerId
       +string Name
       +bool IsRemoved
       +DateTimeOffset CreatedAt
@@ -239,7 +231,7 @@ classDiagram
     }
     class SelectionDocument {
       +Guid Id
-      +Guid OwnerId
+      +string OwnerId
       +DateTimeOffset CreatedAt
       +DateTimeOffset ExpiresAt
     }
@@ -252,7 +244,7 @@ classDiagram
       +double Confidence
     }
     class UserProfileDocument {
-      +Guid Id
+      +string Id
       +string DisplayName
       +Guid DefaultCollectionId
       +DateTimeOffset CreatedAt
@@ -263,7 +255,7 @@ classDiagram
   namespace Recognition {
     class ScanLogDocument {
       +Guid Id
-      +Guid OwnerId
+      +string OwnerId
       +DateTimeOffset ScannedAt
       +RecognitionConfidence Confidence
       +string ImageObjectKey
@@ -313,9 +305,6 @@ classDiagram
   CardInstance ..> CardPrinting : PrintingId
   SelectionEntry ..> CardPrinting : PrintingId
   ScanLogCandidate ..> CardPrinting : PrintingId
-  CollectionDocument ..> DeviceUser : OwnerId
-  SelectionDocument ..> DeviceUser : OwnerId
-  ScanLogDocument ..> DeviceUser : OwnerId
   UserProfileDocument ..> CollectionDocument : DefaultCollectionId
 ```
 

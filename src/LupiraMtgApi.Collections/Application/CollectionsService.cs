@@ -31,7 +31,7 @@ public sealed class CollectionsService
         _hydrator = hydrator;
     }
 
-    public async Task<CollectionListResponse> ListAsync(Guid ownerId, CancellationToken ct)
+    public async Task<CollectionListResponse> ListAsync(string ownerId, CancellationToken ct)
     {
         var docs = await Marten.QueryableExtensions.ToListAsync(
             _session.Query<CollectionDocument>()
@@ -53,7 +53,7 @@ public sealed class CollectionsService
         return new CollectionListResponse { Collections = responses };
     }
 
-    public async Task<Op<CollectionResponse>> CreateAsync(Guid ownerId, CreateCollectionRequest request, CancellationToken ct)
+    public async Task<Op<CollectionResponse>> CreateAsync(string ownerId, CreateCollectionRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
         if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
@@ -85,7 +85,7 @@ public sealed class CollectionsService
         });
     }
 
-    public async Task<CollectionDetailResponse?> GetAsync(Guid ownerId, Guid collectionId, CancellationToken ct)
+    public async Task<CollectionDetailResponse?> GetAsync(string ownerId, Guid collectionId, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
@@ -105,7 +105,7 @@ public sealed class CollectionsService
         };
     }
 
-    public async Task<Op<CollectionResponse>> RenameAsync(Guid ownerId, Guid collectionId, RenameCollectionRequest request, CancellationToken ct)
+    public async Task<Op<CollectionResponse>> RenameAsync(string ownerId, Guid collectionId, RenameCollectionRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
         if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
@@ -134,7 +134,7 @@ public sealed class CollectionsService
         });
     }
 
-    public async Task<bool> DeleteAsync(Guid ownerId, Guid collectionId, CancellationToken ct)
+    public async Task<bool> DeleteAsync(string ownerId, Guid collectionId, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
@@ -150,7 +150,7 @@ public sealed class CollectionsService
         return true;
     }
 
-    public async Task<CardInstanceListResponse?> ListCardsAsync(Guid ownerId, Guid collectionId, int? take, int? skip, CancellationToken ct)
+    public async Task<CardInstanceListResponse?> ListCardsAsync(string ownerId, Guid collectionId, int? take, int? skip, CancellationToken ct)
     {
         var clampedTake = Math.Clamp(take ?? PageDefaultLimit, 1, PageMaxLimit);
         var clampedSkip = Math.Max(skip ?? 0, 0);
@@ -186,7 +186,7 @@ public sealed class CollectionsService
         return new CardInstanceListResponse { Cards = cards, Total = total };
     }
 
-    public async Task<Op<CardInstanceResponse>> AddCardAsync(Guid ownerId, Guid collectionId, AddCardToCollectionRequest request, CancellationToken ct)
+    public async Task<Op<CardInstanceResponse>> AddCardAsync(string ownerId, Guid collectionId, AddCardToCollectionRequest request, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
@@ -222,7 +222,7 @@ public sealed class CollectionsService
         return Op<CardInstanceResponse>.Ok(hydrated.Single());
     }
 
-    public async Task<bool> RemoveCardAsync(Guid ownerId, Guid collectionId, Guid instanceId, CancellationToken ct)
+    public async Task<bool> RemoveCardAsync(string ownerId, Guid collectionId, Guid instanceId, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
@@ -242,7 +242,7 @@ public sealed class CollectionsService
         return true;
     }
 
-    public async Task<Op<CardInstanceResponse>> MoveCardAsync(Guid ownerId, Guid collectionId, Guid instanceId, MoveCardRequest request, CancellationToken ct)
+    public async Task<Op<CardInstanceResponse>> MoveCardAsync(string ownerId, Guid collectionId, Guid instanceId, MoveCardRequest request, CancellationToken ct)
     {
         if (request.ToCollectionId == collectionId)
         {
@@ -281,7 +281,7 @@ public sealed class CollectionsService
         return Op<CardInstanceResponse>.Ok(hydrated.Single());
     }
 
-    public async Task<Op<BulkAddCardsResponse>> BulkAddCardsAsync(Guid ownerId, Guid collectionId, BulkAddCardsRequest request, CancellationToken ct)
+    public async Task<Op<BulkAddCardsResponse>> BulkAddCardsAsync(string ownerId, Guid collectionId, BulkAddCardsRequest request, CancellationToken ct)
     {
         if (request.Items is null || request.Items.Count == 0)
         {
@@ -358,7 +358,7 @@ public sealed class CollectionsService
         return Op<BulkAddCardsResponse>.Ok(new BulkAddCardsResponse { Added = hydrated });
     }
 
-    public async Task<Op<BulkRemoveCardsResponse>> BulkRemoveCardsAsync(Guid ownerId, Guid collectionId, BulkRemoveCardsRequest request, CancellationToken ct)
+    public async Task<Op<BulkRemoveCardsResponse>> BulkRemoveCardsAsync(string ownerId, Guid collectionId, BulkRemoveCardsRequest request, CancellationToken ct)
     {
         if (request.InstanceIds is null || request.InstanceIds.Count == 0)
         {
@@ -386,7 +386,7 @@ public sealed class CollectionsService
         return Op<BulkRemoveCardsResponse>.Ok(new BulkRemoveCardsResponse { RemovedCount = removed, MissingCount = missing });
     }
 
-    public async Task<Op<BulkMoveCardsResponse>> BulkMoveCardsAsync(Guid ownerId, Guid collectionId, BulkMoveCardsRequest request, CancellationToken ct)
+    public async Task<Op<BulkMoveCardsResponse>> BulkMoveCardsAsync(string ownerId, Guid collectionId, BulkMoveCardsRequest request, CancellationToken ct)
     {
         if (request.InstanceIds is null || request.InstanceIds.Count == 0)
         {
@@ -430,7 +430,7 @@ public sealed class CollectionsService
         return Op<BulkMoveCardsResponse>.Ok(new BulkMoveCardsResponse { Moved = hydrated, MissingCount = missing });
     }
 
-    private async Task<CollectionDocument?> LoadOwnedAsync(Guid id, Guid ownerId, CancellationToken ct)
+    private async Task<CollectionDocument?> LoadOwnedAsync(Guid id, string ownerId, CancellationToken ct)
     {
         var doc = await _session.LoadAsync<CollectionDocument>(id, ct);
         if (doc is null || doc.OwnerId != ownerId || doc.IsRemoved)

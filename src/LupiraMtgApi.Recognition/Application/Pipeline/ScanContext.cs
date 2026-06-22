@@ -20,8 +20,8 @@ public sealed record ScanContext
 
     public required DateTimeOffset ScannedAt { get; init; }
 
-    /// <summary>Authenticated owner, when present. Drives image upload + scan log persistence.</summary>
-    public Guid? OwnerId { get; init; }
+    /// <summary>Authenticated owner (OIDC subject = email), when present. Drives image upload + scan log persistence.</summary>
+    public string? OwnerId { get; init; }
 
     /// <summary>Original (pre-crop) bytes uploaded by the client.</summary>
     public required byte[] OriginalBytes { get; init; }

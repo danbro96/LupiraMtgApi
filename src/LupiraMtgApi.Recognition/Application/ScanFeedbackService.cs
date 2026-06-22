@@ -38,7 +38,7 @@ public sealed class ScanFeedbackService
     }
 
     public async Task<ScanFeedbackResult> SubmitAsync(
-        Guid ownerId,
+        string ownerId,
         Guid scanId,
         string correctPrintingId,
         CancellationToken ct)

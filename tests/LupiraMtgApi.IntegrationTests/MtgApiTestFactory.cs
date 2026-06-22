@@ -1,5 +1,10 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 using Testcontainers.PostgreSql;
 
 namespace LupiraMtgApi.IntegrationTests;
@@ -29,7 +34,34 @@ public sealed class MtgApiTestFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Florence__ApiKey", "test");
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Development");
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Development");
+
+        // Reconfigure JwtBearer to validate locally-minted HS256 tokens against a fixed key/issuer
+        // instead of fetching Authentik's JWKS — so the auth path is exercised offline. Clearing
+        // Authority + supplying an empty Configuration stops the handler reaching for OIDC metadata.
+        builder.ConfigureTestServices(services =>
+        {
+            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+            {
+                options.Authority = null;
+                options.RequireHttpsMetadata = false;
+                options.Configuration = new OpenIdConnectConfiguration();
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = TestTokens.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = TestTokens.Audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = TestTokens.SigningKey,
+                    ValidateLifetime = true,
+                };
+            });
+        });
+    }
 
     protected override void Dispose(bool disposing)
     {

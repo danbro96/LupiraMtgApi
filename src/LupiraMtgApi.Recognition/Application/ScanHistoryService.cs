@@ -41,7 +41,7 @@ public sealed class ScanHistoryService
         _prices = prices;
     }
 
-    public async Task<ScanListResponse> ListAsync(Guid ownerId, int? take, int? skip, CancellationToken ct)
+    public async Task<ScanListResponse> ListAsync(string ownerId, int? take, int? skip, CancellationToken ct)
     {
         var clampedTake = Math.Clamp(take ?? DefaultLimit, 1, MaxLimit);
         var clampedSkip = Math.Max(skip ?? 0, 0);
@@ -106,7 +106,7 @@ public sealed class ScanHistoryService
         return new ScanListResponse { Results = results, Total = total };
     }
 
-    public async Task<ScanDetailResponse?> GetAsync(Guid ownerId, Guid scanId, CancellationToken ct)
+    public async Task<ScanDetailResponse?> GetAsync(string ownerId, Guid scanId, CancellationToken ct)
     {
         var doc = await _session.LoadAsync<ScanLogDocument>(scanId, ct);
         if (doc is null || doc.OwnerId != ownerId)
