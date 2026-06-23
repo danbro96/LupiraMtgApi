@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Marten" Version="9.8.2" />
+    <PackageReference Include="Marten" Version="9.10.0" />
     <PackageReference Include="CoenM.ImageSharp.ImageHash" Version="1.3.6" />
     <!-- Pinned to 3.1.12 (last version under the free Six Labors Split License). 4.x enforces a
          paid commercial license at build time — bump only with a purchased license key. -->

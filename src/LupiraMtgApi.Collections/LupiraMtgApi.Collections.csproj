@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Marten" Version="9.8.2" />
+    <PackageReference Include="Marten" Version="9.10.0" />
   </ItemGroup>
 
   <!-- Restore the Microsoft.Extensions.* global usings the Web SDK provided implicitly. No ASP.NET. -->

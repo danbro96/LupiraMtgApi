@@ -31,7 +31,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.4" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.5" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
 
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
@@ -41,7 +41,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
 
     <!-- Host composes Marten (store + sessions) and owns the cross-context Scryfall sync (Cronos schedule). -->
-    <PackageReference Include="Marten" Version="9.8.2" />
+    <PackageReference Include="Marten" Version="9.10.0" />
     <PackageReference Include="Cronos" Version="0.13.0" />
 
     <!-- EF Core tooling resolves the DbContext (in Catalog) through this startup project, so the
