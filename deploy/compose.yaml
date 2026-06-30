@@ -30,11 +30,11 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-300000}
-      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=prod,host.name=medelynas}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=prod}
     ports:
       - "${HOST_PORT:-40580}:8080"
     volumes:
-      - /mnt/tank2/appdata/lupira_mtg_api/cache:/app/cache
+      - ${CACHE_DIR:-./cache}:/app/cache
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz || exit 1"]
       interval: 60s
