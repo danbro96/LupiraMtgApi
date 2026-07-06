@@ -68,7 +68,7 @@ public sealed class RotationRetryStep : IScanStep
             var altPHashTask = _pHash.RunAsync(altBytes, ctx.ScanId, tryAltRotation: false);
             var altOcrTask = _ocr.ReadRegionsAsync(altBytes, preprocessed.MediaType, ct);
             var altSymbolTask = preprocessed.IsCropped
-                ? _symbolDetector.DetectAsync(altBytes, preprocessed.MediaType, ct)
+                ? _symbolDetector.DetectAsync(altBytes, ct)
                 : Task.FromResult<SetSymbolMatch?>(null);
 
             await Task.WhenAll(altPHashTask, altOcrTask, altSymbolTask);

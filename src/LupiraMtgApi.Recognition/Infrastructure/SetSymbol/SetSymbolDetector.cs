@@ -31,7 +31,7 @@ public sealed class SetSymbolDetector
         _logger = logger;
     }
 
-    public async Task<SetSymbolMatch?> DetectAsync(byte[] croppedBytes, string mediaType, CancellationToken ct)
+    public async Task<SetSymbolMatch?> DetectAsync(byte[] croppedBytes, CancellationToken ct)
     {
         if (!_index.IsLoaded)
         {

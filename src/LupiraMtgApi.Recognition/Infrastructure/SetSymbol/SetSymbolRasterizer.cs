@@ -16,12 +16,10 @@ public sealed class SetSymbolRasterizer
     private const double LuminanceThreshold = 0.65;
 
     private readonly PHashService _pHash;
-    private readonly ILogger<SetSymbolRasterizer> _logger;
 
-    public SetSymbolRasterizer(PHashService pHash, ILogger<SetSymbolRasterizer> logger)
+    public SetSymbolRasterizer(PHashService pHash)
     {
         _pHash = pHash;
-        _logger = logger;
     }
 
     public async Task<RasterizedSymbol> RasterizeAsync(Stream svgStream, CancellationToken ct)

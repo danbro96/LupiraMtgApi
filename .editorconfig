@@ -452,3 +452,7 @@ dotnet_diagnostic.SA1601.severity = none
 
 resharper_redundant_string_interpolation_highlighting=warning
 csharp_prefer_system_threading_lock = true:suggestion
+
+# EF Core migrations are generated code; exclude from style analysis.
+[**/Migrations/*.cs]
+generated_code = true

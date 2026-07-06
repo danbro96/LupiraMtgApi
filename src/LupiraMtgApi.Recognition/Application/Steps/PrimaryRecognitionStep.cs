@@ -48,7 +48,7 @@ public sealed class PrimaryRecognitionStep : IScanStep
         var pHashTask = _pHash.RunAsync(preprocessed.Bytes, ctx.ScanId, tryAltRotation: preprocessed.Rotated);
         var ocrTask = RunOcrAsync(preprocessed.Bytes, preprocessed.MediaType, ctx.ScanId, ct);
         var symbolTask = preprocessed.IsCropped
-            ? RunSymbolDetectAsync(preprocessed.Bytes, preprocessed.MediaType, ct)
+            ? RunSymbolDetectAsync(preprocessed.Bytes, ct)
             : Task.FromResult<SetSymbolMatch?>(null);
 
         await Task.WhenAll(pHashTask, ocrTask, symbolTask);
@@ -91,10 +91,10 @@ public sealed class PrimaryRecognitionStep : IScanStep
         }
     }
 
-    private async Task<SetSymbolMatch?> RunSymbolDetectAsync(byte[] bytes, string mediaType, CancellationToken ct)
+    private async Task<SetSymbolMatch?> RunSymbolDetectAsync(byte[] bytes, CancellationToken ct)
     {
         using var span = ScanTelemetry.Source.StartActivity("symbol.detect");
-        var match = await _symbolDetector.DetectAsync(bytes, mediaType, ct);
+        var match = await _symbolDetector.DetectAsync(bytes, ct);
         span?.SetTag("symbol.matched", match is not null);
         if (match is not null)
         {
