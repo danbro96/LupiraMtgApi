@@ -14,6 +14,7 @@ using LupiraMtgApi.Pricing.Data;
 using LupiraMtgApi.Recognition.Data;
 using LupiraMtgApi.Sync;
 using Marten;
+using Weasel.Core;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +49,9 @@ builder.Services
     {
         opts.Connection(connectionString);
         opts.DatabaseSchemaName = "users";
-        opts.UseSystemTextJsonForSerialization();
+        // Store enums as strings (not integers) so reordering/inserting an enum value can't reinterpret
+        // stored documents; matches the platform convention across the Lupira APIs.
+        opts.UseSystemTextJsonForSerialization(EnumStorage.AsString);
 
         // Prod controls schema explicitly (see --apply-schema); only dev auto-creates.
         opts.AutoCreateSchemaObjects = builder.Environment.IsDevelopment()
