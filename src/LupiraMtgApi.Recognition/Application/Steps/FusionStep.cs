@@ -3,15 +3,12 @@ using LupiraMtgApi.Recognition.Application.Pipeline;
 namespace LupiraMtgApi.Recognition.Application.Steps;
 
 /// <summary>
-/// Merges per-zone OCR scores with pHash hits into a per-printing
-/// <see cref="RankedCandidate"/> dictionary, then computes a FinalScore by treating
-/// pHash and OCR as independent likelihood signals and combining them via probabilistic
-/// OR: <c>1 − (1 − ocrScore) × (1 − hammingScore)</c>. The combination is monotonic in
-/// each input, so adding a corroborating signal never lowers a candidate's score —
-/// fixing the prior bug where an OCR-only candidate could outrank an OCR+pHash
-/// candidate of the same oracle. The formula is parameter-free; <c>PHashWeight</c> and
-/// <c>OcrWeight</c> on <see cref="ScanScoringOptions"/> are unused by fusion now and
-/// remain only as no-op config keys for backward compatibility.
+/// Merges per-zone OCR scores with pHash hits into a per-printing <see cref="RankedCandidate"/> dictionary, then
+/// computes FinalScore by treating pHash and OCR as independent likelihood signals combined via probabilistic OR:
+/// <c>1 − (1 − ocrScore) × (1 − hammingScore)</c>. Monotonic in each input, so a corroborating signal can never
+/// lower a candidate's score — an OCR-only candidate can no longer outrank an OCR+pHash one of the same oracle.
+/// Parameter-free: <c>PHashWeight</c> and <c>OcrWeight</c> on <see cref="ScanScoringOptions"/> are unused by
+/// fusion and remain only as no-op config keys for backward compatibility.
 /// </summary>
 public sealed class FusionStep : IScanStep
 {

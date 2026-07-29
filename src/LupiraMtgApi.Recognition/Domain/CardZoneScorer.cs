@@ -148,20 +148,16 @@ public sealed class CardZoneScorer
 
         span?.SetTag("zone.input_length", trimmed.Length);
 
-        // word_similarity (not similarity) — the OCR captures rules text + flavor text
-        // together, since the card prints them adjacently and Florence has no concept of
-        // "rules vs. flavor". Plain similarity() punishes the length mismatch (DB stores
-        // only rules); word_similarity finds the best subsequence of the OCR string that
-        // aligns with the DB rules and ignores the rest. Coalesce to OracleText so rows
-        // whose RulesText is null (older sync, or upstream missing printed_text) still
-        // get scored against canonical English oracle text.
+        // word_similarity, not similarity — the OCR captures rules and flavor text together (the card prints
+        // them adjacently and Florence has no concept of "rules vs. flavor"), so plain similarity() punishes the
+        // length mismatch against a DB that stores only rules. word_similarity finds the best-aligning
+        // subsequence and ignores the rest. Coalesce to OracleText so rows with a null RulesText (older sync, or
+        // upstream missing printed_text) still score against canonical English oracle text.
         //
-        // Order matters in CardZoneScorer.ScoreAsync — Name and TypeLine run before this
-        // method, so byPrinting holds the candidates from those zones. Narrow the rules
-        // query to that pool when it has anything in it: ~80K rows → typical 25-75 pool
-        // members drops the query latency from ~900ms to <50ms. Keep full-scan as the
-        // fallback because RulesText can be the only signal that finds a card with a
-        // garbled name (printer ink smear, foreign printing, …).
+        // Name and TypeLine run before this in ScoreAsync, so byPrinting already holds their candidates. Narrow
+        // the rules query to that pool when non-empty: ~80K rows → a typical 25-75 member pool drops latency from
+        // ~900ms to <50ms. Keep the full scan as fallback, since RulesText can be the only signal that finds a
+        // card with a garbled name (ink smear, foreign printing, …).
         var query = _db.CardPrintings
             .AsNoTracking()
             .Where(p => p.RulesText != null || p.OracleText != null);

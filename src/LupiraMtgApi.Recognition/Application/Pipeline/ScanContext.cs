@@ -6,12 +6,9 @@ using System.Diagnostics;
 namespace LupiraMtgApi.Recognition.Application.Pipeline;
 
 /// <summary>
-/// Append-only accumulator passed between scan pipeline steps. Each step reads what
-/// previous steps populated and returns a new context with its own outputs added via
-/// <see cref="With"/>; no step mutates an earlier step's outputs.
-///
-/// This is the single shared state object; replaces the dozen-odd local variables
-/// that were threaded through the procedural ScanHandler.
+/// Append-only accumulator passed between scan pipeline steps: each step reads what previous steps populated
+/// and returns a new context with its own outputs added via <see cref="With"/>. No step mutates an earlier
+/// step's outputs. The single shared state object for a scan.
 /// </summary>
 public sealed record ScanContext
 {

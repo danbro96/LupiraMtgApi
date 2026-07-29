@@ -1,13 +1,10 @@
 namespace LupiraMtgApi.Recognition.Application.Pipeline;
 
 /// <summary>
-/// Sequential executor of <see cref="IScanStep"/> instances. Each step receives the
-/// context produced by the previous step. Steps are responsible for their own
-/// telemetry, error handling, and conditional behavior (e.g., RotationRetryStep
-/// is a no-op when the input doesn't warrant retry).
-///
-/// Pipeline composition is owned by Program.cs DI registration; the executor itself
-/// is intentionally trivial — that's the point.
+/// Sequential executor of <see cref="IScanStep"/> instances; each step receives the context the previous one
+/// produced. Steps own their own telemetry, error handling and conditional behaviour (e.g. RotationRetryStep
+/// no-ops when the input doesn't warrant a retry), which is why the executor itself stays trivial.
+/// Composition lives in Program.cs DI registration.
 /// </summary>
 public sealed class ScanPipeline
 {

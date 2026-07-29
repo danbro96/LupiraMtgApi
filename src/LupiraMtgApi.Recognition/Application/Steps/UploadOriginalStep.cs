@@ -4,15 +4,11 @@ using LupiraMtgApi.Recognition.Application.Pipeline;
 namespace LupiraMtgApi.Recognition.Application.Steps;
 
 /// <summary>
-/// Best-effort upload of the original (pre-crop) image bytes to MinIO so a future,
-/// smarter extractor can re-process the user's actual capture rather than the cropped
-/// derivative. Only fires when the scan has an authenticated owner. A MinIO failure
-/// must not break scanning — outcome is recorded in <see cref="ScanContext.ImageUploaded"/>
-/// for the persistence step to consult.
-///
-/// Note: pre-refactor this ran in parallel with crop+pHash+OCR via Task.WhenAll, saving
-/// ~30-100ms per scan. Now sequential at the head of the pipeline; the cost is small
-/// against multi-second OCR latency and the architecture wins are larger.
+/// Best-effort upload of the original (pre-crop) image bytes to MinIO, so a future smarter extractor can
+/// re-process the user's actual capture rather than the cropped derivative. Only fires when the scan has an
+/// authenticated owner. A MinIO failure must not break scanning — the outcome is recorded in
+/// <see cref="ScanContext.ImageUploaded"/> for the persistence step to consult. Runs sequentially at the head of
+/// the pipeline; its ~30-100ms costs little against multi-second OCR latency.
 /// </summary>
 public sealed class UploadOriginalStep : IScanStep
 {
