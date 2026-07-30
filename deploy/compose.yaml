@@ -10,6 +10,9 @@ services:
       Auth__Authority: ${AUTH_AUTHORITY:-https://auth.lupira.com/application/o/lupira-mtg/}
       Auth__Audience: ${AUTH_AUDIENCE:-lupira-mtg}
 
+      # Last-seen is coalesced rather than written per request; this is the flush cadence.
+      Auth__LastSeenWriteInterval: ${AUTH_LAST_SEEN_WRITE_INTERVAL:-00:15:00}
+
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=lupira_mtg;Username=lupira_mtg_user;Password=${LUPIRA_MTG_DB_PASSWORD:?required}"
 
       Florence__Url: ${FLORENCE_URL:-http://florence-api:8080}
