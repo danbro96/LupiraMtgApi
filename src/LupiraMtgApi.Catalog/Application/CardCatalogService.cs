@@ -246,6 +246,7 @@ public sealed class CardCatalogService
         {
             parts.Add(subtype);
         }
+
         return string.Join(" — ", parts);
     }
 
@@ -436,6 +437,7 @@ public sealed class CardCatalogService
             {
                 return null;
             }
+
             return ReadRepresentative(reader);
         }
         finally

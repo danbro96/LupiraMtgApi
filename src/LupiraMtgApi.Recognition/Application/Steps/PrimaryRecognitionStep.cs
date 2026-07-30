@@ -1,8 +1,8 @@
+using System.Diagnostics;
 using LupiraMtgApi.Recognition.Application.Pipeline;
 using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.Ocr;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
-using System.Diagnostics;
 
 namespace LupiraMtgApi.Recognition.Application.Steps;
 

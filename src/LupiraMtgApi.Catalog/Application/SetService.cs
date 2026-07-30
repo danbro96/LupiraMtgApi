@@ -32,7 +32,7 @@ public sealed class SetService
         var clampedTake = Math.Clamp(take ?? DefaultLimit, 1, MaxLimit);
         var clampedSkip = Math.Max(skip ?? 0, 0);
 
-        IQueryable<ScryfallSet> query = _db.Sets.AsNoTracking();
+        var query = _db.Sets.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(setType))
         {

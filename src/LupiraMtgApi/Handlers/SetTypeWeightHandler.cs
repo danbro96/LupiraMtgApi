@@ -26,6 +26,7 @@ public sealed class SetTypeWeightHandler
         {
             return Problems.BadRequest("setType must be 1..32 characters.");
         }
+
         if (!double.IsFinite(request.Weight) || request.Weight < 0)
         {
             return Problems.BadRequest("weight must be a finite non-negative number.");

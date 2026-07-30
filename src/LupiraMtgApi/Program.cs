@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using JasperFx;
 using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Collections.Data;
@@ -14,7 +16,6 @@ using LupiraMtgApi.Pricing.Data;
 using LupiraMtgApi.Recognition.Data;
 using LupiraMtgApi.Sync;
 using Marten;
-using Weasel.Core;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +25,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
-using System.Text.Json.Serialization;
-using System.Threading.RateLimiting;
+using Weasel.Core;
 // `dotnet-getdocument` (Microsoft.Extensions.ApiDescription.Server's build-time
 // OpenAPI emitter) loads this assembly and runs Main() to obtain the document
 // provider — but it never calls `app.Run()`. When we detect that mode, we

@@ -1,6 +1,6 @@
+using System.Diagnostics;
 using LupiraMtgApi.Recognition.Application.Pipeline;
 using LupiraMtgApi.Recognition.Dtos;
-using System.Diagnostics;
 
 namespace LupiraMtgApi.Recognition.Application;
 

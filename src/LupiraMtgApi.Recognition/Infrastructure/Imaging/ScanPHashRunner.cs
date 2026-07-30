@@ -1,8 +1,8 @@
+using System.Diagnostics;
 using LupiraMtgApi.Recognition.Application.Pipeline;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using System.Diagnostics;
 
 namespace LupiraMtgApi.Recognition.Infrastructure.Imaging;
 

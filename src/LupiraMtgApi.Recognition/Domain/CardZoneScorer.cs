@@ -1,8 +1,8 @@
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 using Microsoft.EntityFrameworkCore;
-using System.Diagnostics;
-using System.Text.RegularExpressions;
 namespace LupiraMtgApi.Recognition.Domain;
 
 public sealed class CardZoneScorer

@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Globalization;
 using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Infrastructure.Scryfall;
@@ -8,9 +11,6 @@ using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using System.Globalization;
 namespace LupiraMtgApi.Sync;
 
 public sealed class ScryfallSyncRunner
@@ -562,6 +562,7 @@ public sealed class ScryfallSyncRunner
                 ImageArtCropKey = prior?.ImageArtCropKey,
             });
         }
+
         return faces;
     }
 

@@ -89,7 +89,7 @@ public sealed class SetTypeWeightStep : IScanStep
 
         foreach (var (id, setCode) in setCodeByPrinting)
         {
-            string? setType = setTypeByCode.GetValueOrDefault(setCode);
+            var setType = setTypeByCode.GetValueOrDefault(setCode);
             var weight = setType is not null && weightByType.TryGetValue(setType, out var w)
                 ? w
                 : _scoring.DefaultSetTypeWeight;

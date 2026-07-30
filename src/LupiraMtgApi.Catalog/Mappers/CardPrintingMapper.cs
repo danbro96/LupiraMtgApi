@@ -79,6 +79,7 @@ public sealed class CardPrintingMapper
                 {
                     faceImages.Normal = await _images.CreatePresignedGetUrlAsync(face.ImageObjectKey, PresignExpiry, ct);
                 }
+
                 if (face.ImageArtCropKey is { Length: > 0 })
                 {
                     faceImages.ArtCrop = await _images.CreatePresignedGetUrlAsync(face.ImageArtCropKey, PresignExpiry, ct);
@@ -97,6 +98,7 @@ public sealed class CardPrintingMapper
                 Images = faceImages,
             });
         }
+
         return result;
     }
 }

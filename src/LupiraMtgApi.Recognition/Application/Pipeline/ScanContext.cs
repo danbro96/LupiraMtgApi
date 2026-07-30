@@ -1,7 +1,7 @@
+using System.Diagnostics;
 using LupiraMtgApi.Recognition.Dtos;
 using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
-using System.Diagnostics;
 
 namespace LupiraMtgApi.Recognition.Application.Pipeline;
 

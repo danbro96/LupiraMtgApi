@@ -36,7 +36,7 @@ public sealed class ScanHandler
         }
 
         var mediaType = string.IsNullOrEmpty(image.ContentType) ? "image/jpeg" : image.ContentType;
-        string? ownerId = httpContext.TryGetOwnerId(out var oid) ? oid : null;
+        var ownerId = httpContext.TryGetOwnerId(out var oid) ? oid : null;
 
         var response = await _service.ScanAsync(imageBytes, mediaType, ownerId, ct);
         return TypedResults.Ok(response);

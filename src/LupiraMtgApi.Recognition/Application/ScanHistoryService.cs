@@ -140,6 +140,7 @@ public sealed class ScanHistoryService
                 // Printing was synced out of existence — skip rather than 500.
                 continue;
             }
+
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
             candidates.Add(new CardCandidateResponse
             {

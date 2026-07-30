@@ -301,10 +301,12 @@ public sealed class CollectionsService
             {
                 return Op<BulkAddCardsResponse>.Invalid("Every item must have a `printingId`.");
             }
+
             var count = Math.Clamp(item.Count ?? 1, 1, MaxItemCount);
             totalInstances += count;
             expanded.Add((item, count));
         }
+
         if (totalInstances > MaxInstancesPerCall)
         {
             return Op<BulkAddCardsResponse>.Invalid($"Bulk add limited to {MaxInstancesPerCall} instances per call (got {totalInstances}).");
