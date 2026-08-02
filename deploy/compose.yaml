@@ -6,6 +6,8 @@ services:
     image: danbro96/lupira-mtg-api:${IMAGE_TAG:-latest}
     container_name: lupira-mtg-api
     environment:
+      # /depz gate (X-Probe-Key from devops-monitor); empty = /depz off.
+      Depz__ProbeKey: ${DEPZ_PROBE_KEY:-}
       # Authentik OIDC: the API validates JWT access tokens against the lupira-mtg provider's JWKS.
       Auth__Authority: ${AUTH_AUTHORITY:-https://auth.lupira.com/application/o/lupira-mtg/}
       Auth__Audience: ${AUTH_AUDIENCE:-lupira-mtg}

@@ -2,7 +2,10 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using JasperFx;
 using LupiraMtgApi.Catalog.Data;
+using LupiraMtgApi.Catalog.Infrastructure.Storage;
 using LupiraMtgApi.Collections.Data;
+using LupiraMtgApi.Dependencies;
+using LupiraMtgApi.Recognition.Infrastructure.Ocr;
 using LupiraMtgApi.Endpoints;
 using LupiraMtgApi.Endpoints.Admin;
 using LupiraMtgApi.Endpoints.Cards;
@@ -97,6 +100,18 @@ builder.Services.AddCatalog(builder.Configuration);
 builder.Services.AddRecognition(builder.Configuration);
 builder.Services.AddCollections();
 builder.Services.AddPricing(builder.Configuration);
+
+// Non-gating dependency probe (/depz): edges derive from the same config the contexts bind.
+builder.Services.Configure<DepzOptions>(builder.Configuration.GetSection(DepzOptions.SectionName));
+var depzOpts = builder.Configuration.GetSection(DepzOptions.SectionName).Get<DepzOptions>() ?? new DepzOptions();
+builder.Services.AddSingleton(DependencyTargets.From(
+    builder.Configuration.GetSection("Florence").Get<FlorenceOcrOptions>() ?? new FlorenceOcrOptions(),
+    builder.Configuration.GetSection("Minio").Get<MinioImageStoreOptions>() ?? new MinioImageStoreOptions()));
+builder.Services.AddSingleton<DependencyReportCache>();
+builder.Services.AddSingleton<DependencyProbe>();
+builder.Services.AddHttpClient(DependencyProbe.ProbeClientName, c => c.Timeout = depzOpts.ProbeTimeout);
+if (depzOpts.Enabled)
+    builder.Services.AddHostedService<DependencyPollWorker>();
 
 // Cross-context Scryfall sync orchestration lives in the host (it writes Catalog data + images and
 // rebuilds Recognition's indexes, so it sits above both contexts).
@@ -224,7 +239,8 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
             {
                 o.RecordException = true;
                 // Health probes are polled constantly by docker + devops-monitor; their spans add nothing.
-                o.Filter = ctx => ctx.Request.Path != "/livez" && ctx.Request.Path != "/readyz";
+                o.Filter = ctx => ctx.Request.Path != "/livez" && ctx.Request.Path != "/readyz"
+                    && ctx.Request.Path != "/depz";
             })
             .AddHttpClientInstrumentation()
             .AddOtlpExporter())
@@ -285,6 +301,7 @@ app.MapGet("/", () => TypedResults.Redirect("/scalar"))
    .AllowAnonymous();
 
 app.MapAppHealthChecks(app.Environment);
+app.MapDepz();
 
 app.MapWhoAmI().RequireAuthorization();
 
