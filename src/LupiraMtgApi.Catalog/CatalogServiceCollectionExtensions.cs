@@ -19,8 +19,8 @@ public static class CatalogServiceCollectionExtensions
 {
     public static IServiceCollection AddCatalog(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<MinioImageStoreOptions>(configuration.GetSection("Minio"));
-        services.AddSingleton<IImageStore, MinioImageStore>();
+        services.Configure<S3ImageStoreOptions>(configuration.GetSection("S3"));
+        services.AddSingleton<IImageStore, S3ImageStore>();
 
         services.AddScoped<CardPrintingMapper>();
         services.AddScoped<CardCatalogService>();

@@ -29,7 +29,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
-    <PackageReference Include="Minio" Version="7.0.0" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.102.3" />
 
     <!-- DI/config/http abstractions used by AddCatalog (the web SDK supplies these to the
          host transitively; a plain class library must reference them explicitly). -->

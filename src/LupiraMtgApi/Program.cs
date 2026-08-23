@@ -106,7 +106,7 @@ builder.Services.Configure<DepzOptions>(builder.Configuration.GetSection(DepzOpt
 var depzOpts = builder.Configuration.GetSection(DepzOptions.SectionName).Get<DepzOptions>() ?? new DepzOptions();
 builder.Services.AddSingleton(DependencyTargets.From(
     builder.Configuration.GetSection("Florence").Get<FlorenceOcrOptions>() ?? new FlorenceOcrOptions(),
-    builder.Configuration.GetSection("Minio").Get<MinioImageStoreOptions>() ?? new MinioImageStoreOptions()));
+    builder.Configuration.GetSection("S3").Get<S3ImageStoreOptions>() ?? new S3ImageStoreOptions()));
 builder.Services.AddSingleton<DependencyReportCache>();
 builder.Services.AddSingleton<DependencyProbe>();
 builder.Services.AddHttpClient(DependencyProbe.ProbeClientName, c => c.Timeout = depzOpts.ProbeTimeout);

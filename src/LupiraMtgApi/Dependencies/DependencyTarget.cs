@@ -13,11 +13,11 @@ public sealed class DependencyTarget
 }
 
 /// <summary>Roster derived from the same options the real clients bind — edges cannot drift.
-/// MinIO is probed on its anonymous health endpoint (S3 auth needs signed requests), so that edge
-/// covers reachability only.</summary>
+/// Garage is probed on its anonymous admin health endpoint (S3 auth needs signed requests), so that
+/// edge covers reachability only.</summary>
 public static class DependencyTargets
 {
-    public static IReadOnlyList<DependencyTarget> From(FlorenceOcrOptions florence, MinioImageStoreOptions minio) =>
+    public static IReadOnlyList<DependencyTarget> From(FlorenceOcrOptions florence, S3ImageStoreOptions s3) =>
     [
         new DependencyTarget
         {
@@ -34,9 +34,9 @@ public static class DependencyTargets
         },
         new DependencyTarget
         {
-            Name = "minio",
-            BaseUrl = string.IsNullOrWhiteSpace(minio.Endpoint) ? "" : $"{(minio.UseSsl ? "https" : "http")}://{minio.Endpoint}/",
-            ProbePath = "minio/health/live",
+            Name = "garage",
+            BaseUrl = string.IsNullOrWhiteSpace(s3.HealthUrl) ? "" : s3.HealthUrl.TrimEnd('/') + "/",
+            ProbePath = "health",
         },
     ];
 }
