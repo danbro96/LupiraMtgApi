@@ -2,7 +2,7 @@ using LupiraMtgApi.Handlers;
 
 namespace LupiraMtgApi.Endpoints.Me;
 
-public static class MyCardsEndpoint
+public static class MyCardsEndpoints
 {
     public static IEndpointConventionBuilder MapMyCards(this IEndpointRouteBuilder app) =>
         app.MapGet("/me/cards", (

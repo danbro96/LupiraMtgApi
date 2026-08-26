@@ -3,7 +3,7 @@ using LupiraMtgApi.Dtos.Sync;
 
 namespace LupiraMtgApi.Endpoints.Admin;
 
-public static class SyncEndpoint
+public static class SyncEndpoints
 {
     public static IEndpointConventionBuilder MapAdminSync(this IEndpointRouteBuilder app) =>
         app.MapPost("/admin/sync/run", (AdminSyncHandler handler, CancellationToken ct) => handler.RunAsync(ct))

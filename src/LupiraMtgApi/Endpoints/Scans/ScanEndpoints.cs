@@ -2,7 +2,7 @@ using LupiraMtgApi.Handlers;
 
 namespace LupiraMtgApi.Endpoints.Scans;
 
-public static class ScanEndpoint
+public static class ScanEndpoints
 {
     public static IEndpointConventionBuilder MapScan(this IEndpointRouteBuilder app) =>
         app.MapPost("/scans", (

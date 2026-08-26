@@ -3,7 +3,7 @@ using LupiraMtgApi.Dtos.Auth;
 
 namespace LupiraMtgApi.Endpoints.Me;
 
-public static class WhoAmIEndpoint
+public static class WhoAmIEndpoints
 {
     public static IEndpointConventionBuilder MapWhoAmI(this IEndpointRouteBuilder app) =>
         app.MapGet("/me", (HttpContext ctx, MeHandler handler) => handler.WhoAmI(ctx))
