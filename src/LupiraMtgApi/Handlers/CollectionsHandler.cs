@@ -15,7 +15,7 @@ public sealed class CollectionsHandler
 
     public CollectionsHandler(CollectionsService service) => _service = service;
 
-    public async Task<Results<Ok<CollectionListResponse>, UnauthorizedHttpResult>> ListAsync(
+    public async Task<Results<Ok<IReadOnlyList<CollectionDto>>, UnauthorizedHttpResult>> ListAsync(
         HttpContext httpContext,
         CancellationToken ct)
     {

@@ -128,7 +128,7 @@ public sealed class CardCatalogService
         return response;
     }
 
-    public async Task<CardPrintingListResponse?> ListPrintingsAsync(string oracleId, CancellationToken ct)
+    public async Task<IReadOnlyList<CardPrintingDto>?> ListPrintingsAsync(string oracleId, CancellationToken ct)
     {
         var printings = await _db.CardPrintings
             .AsNoTracking()
@@ -167,7 +167,7 @@ public sealed class CardCatalogService
             results.Add(await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct));
         }
 
-        return new CardPrintingListResponse { Results = results };
+        return results;
     }
 
     public async Task<CardPrintingDto?> GetPrintingAsync(

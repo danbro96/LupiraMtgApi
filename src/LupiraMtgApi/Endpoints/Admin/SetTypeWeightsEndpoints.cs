@@ -18,7 +18,7 @@ public static class SetTypeWeightsEndpoints
                 core/expansion above commander/funny so a Lightning Bolt scan prefers the M21
                 printing over a Funko Pop one. This endpoint exposes the live values.
                 """)
-            .Produces<SetTypeWeightListResponse>(StatusCodes.Status200OK)
+            .Produces<IReadOnlyList<SetTypeWeightDto>>(StatusCodes.Status200OK)
             .WithName("ListSetTypeWeights");
 
         group.MapPut("/{setType}", (string setType, UpdateSetTypeWeightRequest body, SetTypeWeightHandler h, CancellationToken ct) =>

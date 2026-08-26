@@ -14,7 +14,7 @@ public sealed class SetTypeWeightService
         _db = db;
     }
 
-    public async Task<SetTypeWeightListResponse> ListAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<SetTypeWeightDto>> ListAsync(CancellationToken ct)
     {
         var weights = await _db.SetTypeWeights
             .AsNoTracking()
@@ -28,7 +28,7 @@ public sealed class SetTypeWeightService
             })
             .ToListAsync(ct);
 
-        return new SetTypeWeightListResponse { Weights = weights };
+        return weights;
     }
 
     /// <summary>

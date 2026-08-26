@@ -12,7 +12,7 @@ public static class CollectionsEndpoints
 
         group.MapGet("/", (HttpContext ctx, CollectionsHandler h, CancellationToken ct) => h.ListAsync(ctx, ct))
             .WithSummary("List the caller's collections.")
-            .Produces<CollectionListResponse>(StatusCodes.Status200OK)
+            .Produces<IReadOnlyList<CollectionDto>>(StatusCodes.Status200OK)
             .WithName("ListCollections");
 
         group.MapPost("/", (HttpContext ctx, CreateCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>

@@ -23,7 +23,7 @@ public sealed class CardCatalogHandler
         return card is null ? TypedResults.NotFound() : TypedResults.Ok(card);
     }
 
-    public async Task<Results<Ok<CardPrintingListResponse>, NotFound>> ListPrintingsAsync(string oracleId, CancellationToken ct)
+    public async Task<Results<Ok<IReadOnlyList<CardPrintingDto>>, NotFound>> ListPrintingsAsync(string oracleId, CancellationToken ct)
     {
         var list = await _service.ListPrintingsAsync(oracleId, ct);
         return list is null ? TypedResults.NotFound() : TypedResults.Ok(list);

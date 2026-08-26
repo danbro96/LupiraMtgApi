@@ -14,7 +14,7 @@ public sealed class SetTypeWeightHandler
 
     public SetTypeWeightHandler(SetTypeWeightService service) => _service = service;
 
-    public async Task<Ok<SetTypeWeightListResponse>> ListAsync(CancellationToken ct) =>
+    public async Task<Ok<IReadOnlyList<SetTypeWeightDto>>> ListAsync(CancellationToken ct) =>
         TypedResults.Ok(await _service.ListAsync(ct));
 
     public async Task<Results<Ok<SetTypeWeightDto>, ProblemHttpResult>> UpsertAsync(

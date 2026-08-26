@@ -53,15 +53,15 @@ public sealed class S3ImageStore : IImageStore, IDisposable
     {
         await _client.PutObjectAsync(
             new PutObjectRequest
-        {
-            BucketName = _options.Bucket,
-            Key = objectKey,
-            InputStream = content,
-            AutoCloseStream = false,
-            ContentType = contentType,
-            // Content-length'd single-shot body — no aws-chunked encoding for third-party compatibility.
-            UseChunkEncoding = false,
-        }, ct);
+            {
+                BucketName = _options.Bucket,
+                Key = objectKey,
+                InputStream = content,
+                AutoCloseStream = false,
+                ContentType = contentType,
+                // Content-length'd single-shot body — no aws-chunked encoding for third-party compatibility.
+                UseChunkEncoding = false,
+            }, ct);
         return objectKey;
     }
 

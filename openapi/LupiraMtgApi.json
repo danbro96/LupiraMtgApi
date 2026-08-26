@@ -342,7 +342,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SetTypeWeightListResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SetTypeWeightDto"
+                  }
                 }
               }
             }
@@ -835,7 +838,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CardPrintingListResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CardPrintingDto"
+                  }
                 }
               }
             }
@@ -1210,7 +1216,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionListResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionDto"
+                  }
                 }
               }
             }
@@ -3158,20 +3167,6 @@
           }
         }
       },
-      "CardPrintingListResponse": {
-        "required": [
-          "results"
-        ],
-        "type": "object",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CardPrintingDto"
-            }
-          }
-        }
-      },
       "CollectionDetailResponse": {
         "required": [
           "id",
@@ -3233,20 +3228,6 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "CollectionListResponse": {
-        "required": [
-          "collections"
-        ],
-        "type": "object",
-        "properties": {
-          "collections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CollectionDto"
-            }
           }
         }
       },
@@ -3905,20 +3886,6 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "SetTypeWeightListResponse": {
-        "required": [
-          "weights"
-        ],
-        "type": "object",
-        "properties": {
-          "weights": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SetTypeWeightDto"
-            }
           }
         }
       },

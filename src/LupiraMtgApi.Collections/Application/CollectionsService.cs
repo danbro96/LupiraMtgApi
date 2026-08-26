@@ -31,7 +31,7 @@ public sealed class CollectionsService
         _hydrator = hydrator;
     }
 
-    public async Task<CollectionListResponse> ListAsync(string ownerId, CancellationToken ct)
+    public async Task<IReadOnlyList<CollectionDto>> ListAsync(string ownerId, CancellationToken ct)
     {
         var docs = await Marten.QueryableExtensions.ToListAsync(
             _session.Query<CollectionDocument>()
@@ -50,7 +50,7 @@ public sealed class CollectionsService
             })
             .ToList();
 
-        return new CollectionListResponse { Collections = responses };
+        return responses;
     }
 
     public async Task<Op<CollectionDto>> CreateAsync(string ownerId, CreateCollectionRequest request, CancellationToken ct)

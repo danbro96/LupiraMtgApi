@@ -73,7 +73,7 @@ public static class CardsEndpoints
                 Returns every printing that shares this Oracle ID, ordered newest-set first.
                 Bounded list (no pagination) — even the most-reprinted cards have ~100 printings.
                 """)
-            .Produces<CardPrintingListResponse>(StatusCodes.Status200OK)
+            .Produces<IReadOnlyList<CardPrintingDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ListPrintings");
 
