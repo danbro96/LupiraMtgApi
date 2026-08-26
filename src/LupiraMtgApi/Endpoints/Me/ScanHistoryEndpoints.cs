@@ -25,7 +25,8 @@ public static class ScanHistoryEndpoints
                 ScanLog projection (every candidate, OCR zones, set-symbol detection, feedback).
                 """)
             .Produces<ScanListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized);
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithName("ListScans");
 
         group.MapGet("/{scanId:guid}", (
                 HttpContext ctx,
@@ -43,7 +44,8 @@ public static class ScanHistoryEndpoints
                 """)
             .Produces<ScanDetailResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetScan");
 
         return app;
     }

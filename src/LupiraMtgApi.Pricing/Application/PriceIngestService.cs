@@ -4,16 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LupiraMtgApi.Pricing.Application;
 
-/// <summary>One printing's EUR prices as observed by an ingest run.</summary>
-public sealed class PriceObservation
-{
-    public required string PrintingId { get; set; }
-
-    public decimal? Eur { get; set; }
-
-    public decimal? EurFoil { get; set; }
-}
-
 /// <summary>
 /// Writes a batch of price observations: upserts <c>card_prices_latest</c> and appends a
 /// <c>card_price_points</c> row only when the value changed since the prior latest (store-on-change).

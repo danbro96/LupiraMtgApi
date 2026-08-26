@@ -26,5 +26,6 @@ public static class ScanEndpoints
                 """)
             .Accepts<IFormFile>("multipart/form-data")
             .Produces<ScanResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status400BadRequest);
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("CreateScan");
 }

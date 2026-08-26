@@ -20,5 +20,6 @@ public static class MyCardsEndpoints
                 Response includes `total` so the client can render "X of Y" headers.
                 """)
             .Produces<CardInstanceListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized);
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithName("ListMeCards");
 }

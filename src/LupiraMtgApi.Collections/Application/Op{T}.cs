@@ -1,14 +1,5 @@
 namespace LupiraMtgApi.Collections.Application;
 
-/// <summary>Outcome of a Collections use case that has more than one non-exception result.</summary>
-public enum OpOutcome
-{
-    Ok,
-    NotFound,
-    Invalid,
-    Conflict,
-}
-
 /// <summary>
 /// Lightweight per-context result for Collections Application services. The host adapter maps
 /// <see cref="Outcome"/> onto HTTP (<c>NotFound</c> → 404, <c>Invalid</c> → 400 with <see cref="Error"/>,

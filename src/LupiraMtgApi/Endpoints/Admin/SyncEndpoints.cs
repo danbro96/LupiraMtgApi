@@ -1,5 +1,5 @@
-using LupiraMtgApi.Handlers;
 using LupiraMtgApi.Dtos.Sync;
+using LupiraMtgApi.Handlers;
 
 namespace LupiraMtgApi.Endpoints.Admin;
 
@@ -18,5 +18,6 @@ public static class SyncEndpoints
                 This endpoint is auth-gated; in production it should be restricted further (admin role)
                 once roles are introduced.
                 """)
-            .Produces<SyncRunResponse>(StatusCodes.Status200OK);
+            .Produces<SyncRunResponse>(StatusCodes.Status200OK)
+            .WithName("RunSync");
 }

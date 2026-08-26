@@ -1,5 +1,5 @@
-using LupiraMtgApi.Handlers;
 using LupiraMtgApi.Dtos.Auth;
+using LupiraMtgApi.Handlers;
 
 namespace LupiraMtgApi.Endpoints.Me;
 
@@ -17,5 +17,6 @@ public static class WhoAmIEndpoints
                 sanity-check from the mobile client on cold start.
                 """)
             .Produces<WhoAmIResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized);
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithName("WhoAmI");
 }

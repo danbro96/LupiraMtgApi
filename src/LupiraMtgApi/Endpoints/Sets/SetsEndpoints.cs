@@ -31,7 +31,8 @@ public static class SetsEndpoints
                 `order` ∈ `asc|desc`, default `desc` (newest first).
                 `take` 1–200 (default 50). `skip` for paging.
                 """)
-            .Produces<SetListResponse>(StatusCodes.Status200OK);
+            .Produces<SetListResponse>(StatusCodes.Status200OK)
+            .WithName("ListSets");
 
         group.MapGet("/{code}", (
                 string code,
@@ -41,7 +42,8 @@ public static class SetsEndpoints
             .WithSummary("Get one set by its lower-case code.")
             .WithDescription("Returns set metadata plus a presigned URL for the set icon (if cached locally).")
             .Produces<SetResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetSet");
 
         return app;
     }

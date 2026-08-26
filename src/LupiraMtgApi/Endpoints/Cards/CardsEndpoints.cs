@@ -1,5 +1,5 @@
-using LupiraMtgApi.Handlers;
 using LupiraMtgApi.Dtos.Cards;
+using LupiraMtgApi.Handlers;
 
 namespace LupiraMtgApi.Endpoints.Cards;
 
@@ -43,7 +43,8 @@ public static class CardsEndpoints
 
                 Use `GET /cards/{oracleId}/printings` to drill into printings for a specific card.
                 """)
-            .Produces<CardListResponse>(StatusCodes.Status200OK);
+            .Produces<CardListResponse>(StatusCodes.Status200OK)
+            .WithName("ListCards");
 
         group.MapGet("/{oracleId}", (
                 string oracleId,
@@ -58,7 +59,8 @@ public static class CardsEndpoints
                 collector number, or prices — see `GET /cards/{oracleId}/printings`.
                 """)
             .Produces<CardResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetCard");
 
         group.MapGet("/{oracleId}/printings", (
                 string oracleId,
@@ -72,7 +74,8 @@ public static class CardsEndpoints
                 Bounded list (no pagination) — even the most-reprinted cards have ~100 printings.
                 """)
             .Produces<CardPrintingListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("ListPrintings");
 
         group.MapGet("/{oracleId}/printings/{printingId}", (
                 string oracleId,
@@ -89,7 +92,8 @@ public static class CardsEndpoints
                 Oracle ID (re-run sync if it should exist).
                 """)
             .Produces<CardPrintingResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("GetPrinting");
 
         group.MapGet("/{oracleId}/printings/{printingId}/prices", (
                 string oracleId,
@@ -108,7 +112,8 @@ public static class CardsEndpoints
                 price points have been recorded for the printing.
                 """)
             .Produces<CardPriceHistoryResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("ListPrices");
 
         return app;
     }

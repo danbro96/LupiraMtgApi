@@ -6,21 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LupiraMtgApi.Recognition.Application;
 
-/// <summary>Outcome of <see cref="ScanFeedbackService.SubmitAsync"/>.</summary>
-public enum ScanFeedbackStatus
-{
-    Ok,
-    ScanNotFound,
-    UnknownPrinting,
-}
-
-/// <summary>
-/// Result of submitting scan feedback. The host adapter maps <see cref="Status"/> onto HTTP:
-/// <c>ScanNotFound</c> → 404 (also covers other-owner scans so existence isn't leaked),
-/// <c>UnknownPrinting</c> → 400, <c>Ok</c> → 200 with <see cref="Response"/>.
-/// </summary>
-public sealed record ScanFeedbackResult(ScanFeedbackStatus Status, ScanFeedbackResponse? Response);
-
 /// <summary>
 /// Records what the user actually wanted from a scan and reports where that printing ranked in the
 /// candidate pool the API surfaced. Owner identity is resolved by the host adapter and passed in;

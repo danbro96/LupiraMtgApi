@@ -201,8 +201,3 @@ public sealed class ScanPHashRunner
         return (primaryHash, primaryHits, primaryBest, "primary");
     }
 }
-
-public readonly record struct PHashResult(long? Hash, int LatencyMs, IReadOnlyList<PHashIndex.PHashHit> Hits)
-{
-    public static PHashResult Empty => new(null, 0, Array.Empty<PHashIndex.PHashHit>());
-}

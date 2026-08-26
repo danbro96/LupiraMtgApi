@@ -8,13 +8,3 @@ public sealed class SetTypeWeightResponse
 
     public required DateTimeOffset UpdatedAt { get; set; }
 }
-
-public sealed class SetTypeWeightListResponse
-{
-    public required IReadOnlyList<SetTypeWeightResponse> Weights { get; set; }
-}
-
-public sealed class UpdateSetTypeWeightRequest
-{
-    public required double Weight { get; set; }
-}

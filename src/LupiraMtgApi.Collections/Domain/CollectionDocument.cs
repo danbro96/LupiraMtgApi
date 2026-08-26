@@ -16,18 +16,3 @@ public sealed class CollectionDocument
 
     public DateTimeOffset UpdatedAt { get; set; }
 }
-
-public sealed class CardInstance
-{
-    public required Guid InstanceId { get; set; }
-
-    public required string PrintingId { get; set; }
-
-    public required bool IsFoil { get; set; }
-
-    public required string Language { get; set; }
-
-    public required string Condition { get; set; }
-
-    public DateTimeOffset AcquiredAt { get; set; }
-}
