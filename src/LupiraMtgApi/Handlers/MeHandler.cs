@@ -1,5 +1,6 @@
+using LupiraMtgApi.Http;
 using System.Security.Claims;
-using LupiraMtgApi.Models.Auth;
+using LupiraMtgApi.Dtos.Auth;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LupiraMtgApi.Handlers;

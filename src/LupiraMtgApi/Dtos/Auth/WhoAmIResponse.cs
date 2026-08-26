@@ -1,4 +1,4 @@
-namespace LupiraMtgApi.Models.Auth;
+namespace LupiraMtgApi.Dtos.Auth;
 
 public sealed class WhoAmIResponse
 {

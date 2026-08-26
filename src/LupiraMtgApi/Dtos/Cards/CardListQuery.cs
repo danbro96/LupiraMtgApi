@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace LupiraMtgApi.Models.Cards;
+namespace LupiraMtgApi.Dtos.Cards;
 
 /// <summary>
 /// Bound from query string via <c>[AsParameters]</c> on <c>GET /cards</c>. Each property

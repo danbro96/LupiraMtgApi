@@ -1,4 +1,4 @@
-using LupiraMtgApi.Models.Sync;
+using LupiraMtgApi.Dtos.Sync;
 using LupiraMtgApi.Sync;
 using Microsoft.AspNetCore.Http.HttpResults;
 namespace LupiraMtgApi.Handlers;

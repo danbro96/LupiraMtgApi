@@ -1,5 +1,5 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Cards;
+using LupiraMtgApi.Dtos.Cards;
 
 namespace LupiraMtgApi.Endpoints.Cards;
 

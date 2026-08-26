@@ -1,4 +1,4 @@
-namespace LupiraMtgApi.Models.Sync;
+namespace LupiraMtgApi.Dtos.Sync;
 
 public sealed class SyncRunResponse
 {

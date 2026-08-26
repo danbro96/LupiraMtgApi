@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 
-namespace LupiraMtgApi.Handlers;
+namespace LupiraMtgApi.Http;
 
 /// <summary>
 /// Shared helpers for emitting RFC 7807 ProblemDetails responses. Every handler that

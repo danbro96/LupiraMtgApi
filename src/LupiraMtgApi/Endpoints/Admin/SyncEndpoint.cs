@@ -1,5 +1,5 @@
 using LupiraMtgApi.Handlers;
-using LupiraMtgApi.Models.Sync;
+using LupiraMtgApi.Dtos.Sync;
 
 namespace LupiraMtgApi.Endpoints.Admin;
 

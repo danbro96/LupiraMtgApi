@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace LupiraMtgApi.Handlers;
+namespace LupiraMtgApi.Http;
 
 internal static class AuthContext
 {

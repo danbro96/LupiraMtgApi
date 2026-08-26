@@ -1,5 +1,5 @@
 using LupiraMtgApi.Catalog.Application;
-using LupiraMtgApi.Models.Cards;
+using LupiraMtgApi.Dtos.Cards;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LupiraMtgApi.Handlers;

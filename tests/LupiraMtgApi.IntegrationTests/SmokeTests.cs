@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using LupiraMtgApi.Models.Auth;
+using LupiraMtgApi.Dtos.Auth;
 using Xunit;
 
 namespace LupiraMtgApi.IntegrationTests;

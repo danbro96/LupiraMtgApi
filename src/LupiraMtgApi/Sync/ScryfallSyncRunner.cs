@@ -5,7 +5,7 @@ using LupiraMtgApi.Catalog.Data;
 using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Infrastructure.Scryfall;
 using LupiraMtgApi.Catalog.Infrastructure.Storage;
-using LupiraMtgApi.Models.Sync;
+using LupiraMtgApi.Dtos.Sync;
 using LupiraMtgApi.Pricing.Application;
 using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;

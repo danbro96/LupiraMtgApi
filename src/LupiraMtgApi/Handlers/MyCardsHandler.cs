@@ -1,4 +1,5 @@
 using LupiraMtgApi.Collections.Application;
+using LupiraMtgApi.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LupiraMtgApi.Handlers;

@@ -1,3 +1,4 @@
+using LupiraMtgApi.Http;
 using LupiraMtgApi.Recognition.Application;
 using Microsoft.AspNetCore.Http.HttpResults;
 
