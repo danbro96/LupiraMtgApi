@@ -25,7 +25,6 @@ public static class ScanHistoryEndpoints
                 ScanLog projection (every candidate, OCR zones, set-symbol detection, feedback).
                 """)
             .Produces<ScanListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .WithName("ListScans");
 
         group.MapGet("/{scanId:guid}", (
@@ -43,7 +42,6 @@ public static class ScanHistoryEndpoints
                 a "why did the scan match this card?" diagnostic UI without needing OpenObserve.
                 """)
             .Produces<ScanDetailResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("GetScan");
 

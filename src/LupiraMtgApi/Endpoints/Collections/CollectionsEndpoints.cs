@@ -13,7 +13,6 @@ public static class CollectionsEndpoints
         group.MapGet("/", (HttpContext ctx, CollectionsHandler h, CancellationToken ct) => h.ListAsync(ctx, ct))
             .WithSummary("List the caller's collections.")
             .Produces<CollectionListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .WithName("ListCollections");
 
         group.MapPost("/", (HttpContext ctx, CreateCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -21,14 +20,12 @@ public static class CollectionsEndpoints
             .WithSummary("Create a new collection.")
             .Produces<CollectionResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .WithName("CreateCollection");
 
         group.MapGet("/{collectionId:guid}", (HttpContext ctx, Guid collectionId, CollectionsHandler h, CancellationToken ct) =>
                 h.GetAsync(ctx, collectionId, ct))
             .WithSummary("Get a collection with its cards.")
             .Produces<CollectionDetailResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("GetCollection");
 
@@ -37,7 +34,6 @@ public static class CollectionsEndpoints
             .WithSummary("Rename a collection.")
             .Produces<CollectionResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("UpdateCollection");
 
@@ -45,7 +41,6 @@ public static class CollectionsEndpoints
                 h.DeleteAsync(ctx, collectionId, ct))
             .WithSummary("Soft-delete a collection.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("DeleteCollection");
 
@@ -64,7 +59,6 @@ public static class CollectionsEndpoints
                 Response includes `total`.
                 """)
             .Produces<CardInstanceListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("ListCollectionCards");
 
@@ -73,7 +67,6 @@ public static class CollectionsEndpoints
             .WithSummary("Add a card to a collection (manual, no scan).")
             .Produces<CardInstanceResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("CreateCollectionCard");
 
@@ -81,7 +74,6 @@ public static class CollectionsEndpoints
                 h.RemoveCardAsync(ctx, collectionId, instanceId, ct))
             .WithSummary("Remove a card from a collection.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("DeleteCollectionCard");
 
@@ -90,7 +82,6 @@ public static class CollectionsEndpoints
             .WithSummary("Move a card to another collection.")
             .Produces<CardInstanceResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("MoveCard");
 
@@ -107,7 +98,6 @@ public static class CollectionsEndpoints
                 """)
             .Produces<BulkAddCardsResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("BulkAddCards");
 
@@ -121,7 +111,6 @@ public static class CollectionsEndpoints
                 """)
             .Produces<BulkRemoveCardsResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("BulkRemoveCards");
 
@@ -136,7 +125,6 @@ public static class CollectionsEndpoints
                 """)
             .Produces<BulkMoveCardsResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status404NotFound)
             .WithName("BulkMoveCards");
 

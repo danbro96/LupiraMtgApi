@@ -17,6 +17,5 @@ public static class WhoAmIEndpoints
                 sanity-check from the mobile client on cold start.
                 """)
             .Produces<WhoAmIResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .WithName("WhoAmI");
 }

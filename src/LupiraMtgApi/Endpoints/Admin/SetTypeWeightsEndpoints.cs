@@ -19,7 +19,6 @@ public static class SetTypeWeightsEndpoints
                 printing over a Funko Pop one. This endpoint exposes the live values.
                 """)
             .Produces<SetTypeWeightListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
             .WithName("ListSetTypeWeights");
 
         group.MapPut("/{setType}", (string setType, UpdateSetTypeWeightRequest body, SetTypeWeightHandler h, CancellationToken ct) =>
@@ -35,7 +34,6 @@ public static class SetTypeWeightsEndpoints
                 """)
             .Produces<SetTypeWeightResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
             .WithName("UpdateSetTypeWeight");
 
         return app;
