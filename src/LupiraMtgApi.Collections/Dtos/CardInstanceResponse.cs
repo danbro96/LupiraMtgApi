@@ -16,7 +16,7 @@ public sealed class CardInstanceResponse
 
     public required DateTimeOffset AcquiredAt { get; set; }
 
-    public Guid? CollectionId { get; set; }
+    public required Guid? CollectionId { get; set; }
 
-    public string? CollectionName { get; set; }
+    public required string? CollectionName { get; set; }
 }

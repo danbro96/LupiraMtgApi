@@ -4,9 +4,9 @@ public sealed class ScanDebug
 {
     public required ScanZoneTexts Zones { get; set; }
 
-    public ScanSetSymbol? SetSymbol { get; set; }
+    public required ScanSetSymbol? SetSymbol { get; set; }
 
-    public long? ImagePHash { get; set; }
+    public required long? ImagePHash { get; set; }
 
     public required bool IsCropped { get; set; }
 

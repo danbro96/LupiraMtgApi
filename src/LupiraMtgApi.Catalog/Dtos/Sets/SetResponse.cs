@@ -8,9 +8,9 @@ public sealed class SetResponse
 
     public required string SetType { get; set; }
 
-    public DateOnly? ReleasedAt { get; set; }
+    public required DateOnly? ReleasedAt { get; set; }
 
-    public int CardCount { get; set; }
+    public required int CardCount { get; set; }
 
-    public string? IconUrl { get; set; }
+    public required string? IconUrl { get; set; }
 }

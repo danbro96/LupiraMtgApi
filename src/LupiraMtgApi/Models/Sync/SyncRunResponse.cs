@@ -6,17 +6,17 @@ public sealed class SyncRunResponse
 
     public required DateTimeOffset StartedAt { get; set; }
 
-    public DateTimeOffset? FinishedAt { get; set; }
+    public required DateTimeOffset? FinishedAt { get; set; }
 
-    public int PrintingsTotal { get; set; }
+    public required int PrintingsTotal { get; set; }
 
-    public int PrintingsAdded { get; set; }
+    public required int PrintingsAdded { get; set; }
 
-    public int PrintingsUpdated { get; set; }
+    public required int PrintingsUpdated { get; set; }
 
-    public int ImagesUploaded { get; set; }
+    public required int ImagesUploaded { get; set; }
 
-    public int PHashesComputed { get; set; }
+    public required int PHashesComputed { get; set; }
 
-    public string? Error { get; set; }
+    public required string? Error { get; set; }
 }

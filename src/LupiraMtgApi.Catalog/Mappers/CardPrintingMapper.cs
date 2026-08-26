@@ -15,22 +15,15 @@ public sealed class CardPrintingMapper
         _images = images;
     }
 
-    public async Task<CardImageUrls> MapImagesAsync(CardPrinting printing, CancellationToken ct)
+    public async Task<CardImageUrls> MapImagesAsync(CardPrinting printing, CancellationToken ct) => new()
     {
-        var imageUrls = new CardImageUrls();
-
-        if (printing.ImageObjectKey is { Length: > 0 })
-        {
-            imageUrls.Normal = await _images.CreatePresignedGetUrlAsync(printing.ImageObjectKey, PresignExpiry, ct);
-        }
-
-        if (printing.ImageArtCropKey is { Length: > 0 })
-        {
-            imageUrls.ArtCrop = await _images.CreatePresignedGetUrlAsync(printing.ImageArtCropKey, PresignExpiry, ct);
-        }
-
-        return imageUrls;
-    }
+        Normal = printing.ImageObjectKey is { Length: > 0 }
+            ? await _images.CreatePresignedGetUrlAsync(printing.ImageObjectKey, PresignExpiry, ct)
+            : null,
+        ArtCrop = printing.ImageArtCropKey is { Length: > 0 }
+            ? await _images.CreatePresignedGetUrlAsync(printing.ImageArtCropKey, PresignExpiry, ct)
+            : null,
+    };
 
     public async Task<CardPrintingResponse> MapAsync(
         CardPrinting printing,
@@ -74,16 +67,15 @@ public sealed class CardPrintingMapper
             CardImageUrls? faceImages = null;
             if (face.ImageObjectKey is { Length: > 0 } || face.ImageArtCropKey is { Length: > 0 })
             {
-                faceImages = new CardImageUrls();
-                if (face.ImageObjectKey is { Length: > 0 })
+                faceImages = new CardImageUrls
                 {
-                    faceImages.Normal = await _images.CreatePresignedGetUrlAsync(face.ImageObjectKey, PresignExpiry, ct);
-                }
-
-                if (face.ImageArtCropKey is { Length: > 0 })
-                {
-                    faceImages.ArtCrop = await _images.CreatePresignedGetUrlAsync(face.ImageArtCropKey, PresignExpiry, ct);
-                }
+                    Normal = face.ImageObjectKey is { Length: > 0 }
+                        ? await _images.CreatePresignedGetUrlAsync(face.ImageObjectKey, PresignExpiry, ct)
+                        : null,
+                    ArtCrop = face.ImageArtCropKey is { Length: > 0 }
+                        ? await _images.CreatePresignedGetUrlAsync(face.ImageArtCropKey, PresignExpiry, ct)
+                        : null,
+                };
             }
 
             result.Add(new CardFaceResponse

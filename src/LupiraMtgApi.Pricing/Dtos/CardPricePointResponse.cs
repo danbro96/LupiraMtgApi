@@ -4,7 +4,7 @@ public sealed class CardPricePointResponse
 {
     public required DateOnly ObservedOn { get; set; }
 
-    public decimal? Eur { get; set; }
+    public required decimal? Eur { get; set; }
 
-    public decimal? EurFoil { get; set; }
+    public required decimal? EurFoil { get; set; }
 }

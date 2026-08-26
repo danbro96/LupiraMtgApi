@@ -56,10 +56,19 @@ public sealed class ScryfallSyncRunner
     {
         using var rootSpan = SyncActivity.StartActivity("scryfall.sync.run");
         var runStopwatch = Stopwatch.StartNew();
+        // Mutable accumulator: the counters are incremented as the run proceeds and the terminal
+        // fields are set when it ends.
         var report = new SyncRunResponse
         {
             Status = "running",
             StartedAt = DateTimeOffset.UtcNow,
+            FinishedAt = null,
+            PrintingsTotal = 0,
+            PrintingsAdded = 0,
+            PrintingsUpdated = 0,
+            ImagesUploaded = 0,
+            PHashesComputed = 0,
+            Error = null,
         };
 
         try

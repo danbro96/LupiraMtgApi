@@ -12,15 +12,15 @@ public sealed class CardFaceResponse
 
     public required string Name { get; set; }
 
-    public string? ManaCost { get; set; }
+    public required string? ManaCost { get; set; }
 
-    public string? TypeLine { get; set; }
+    public required string? TypeLine { get; set; }
 
-    public string? OracleText { get; set; }
+    public required string? OracleText { get; set; }
 
-    public string? Power { get; set; }
+    public required string? Power { get; set; }
 
-    public string? Toughness { get; set; }
+    public required string? Toughness { get; set; }
 
-    public CardImageUrls? Images { get; set; }
+    public required CardImageUrls? Images { get; set; }
 }

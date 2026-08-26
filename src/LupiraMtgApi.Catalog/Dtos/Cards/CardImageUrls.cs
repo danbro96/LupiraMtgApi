@@ -2,7 +2,7 @@ namespace LupiraMtgApi.Catalog.Dtos.Cards;
 
 public sealed class CardImageUrls
 {
-    public string? Normal { get; set; }
+    public required string? Normal { get; set; }
 
-    public string? ArtCrop { get; set; }
+    public required string? ArtCrop { get; set; }
 }

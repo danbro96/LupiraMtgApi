@@ -24,9 +24,9 @@ public sealed class CardCandidateResponse
 
     public required double SetTypeWeight { get; set; }
 
-    public int? HammingDistance { get; set; }
+    public required int? HammingDistance { get; set; }
 
-    public bool MatchedByPHash { get; set; }
+    public required bool MatchedByPHash { get; set; }
 
-    public bool MatchedByName { get; set; }
+    public required bool MatchedByName { get; set; }
 }
