@@ -4,7 +4,6 @@
     <!-- Bounded context: card market prices (prices schema, EF Core). Latest + daily history,
          fed from the Scryfall sync (Cardmarket-sourced EUR). Leaf context — depends only on
          EF + Npgsql, never on Catalog, so Catalog can reference it for hydration without a cycle. -->
-    <RootNamespace>LupiraMtgApi.Pricing</RootNamespace>
   </PropertyGroup>
 
   <!-- Restore the Microsoft.Extensions.* global usings the Web SDK provided implicitly. No ASP.NET. -->

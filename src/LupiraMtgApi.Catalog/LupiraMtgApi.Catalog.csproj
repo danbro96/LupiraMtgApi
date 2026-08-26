@@ -3,7 +3,6 @@
   <PropertyGroup>
     <!-- Bounded context: immutable MTG reference data (cards/auth schema, EF Core),
          Scryfall catalog source, and image storage. No ASP.NET — that lives in the host. -->
-    <RootNamespace>LupiraMtgApi.Catalog</RootNamespace>
   </PropertyGroup>
 
   <!-- The Web SDK provided these as implicit global usings; a plain class library does not,

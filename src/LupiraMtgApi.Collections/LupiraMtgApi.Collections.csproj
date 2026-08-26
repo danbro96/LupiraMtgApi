@@ -3,7 +3,6 @@
   <PropertyGroup>
     <!-- Bounded context: user state (users schema via Marten) — collections, selections,
          profiles. Depends on Catalog for card hydration. -->
-    <RootNamespace>LupiraMtgApi.Collections</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

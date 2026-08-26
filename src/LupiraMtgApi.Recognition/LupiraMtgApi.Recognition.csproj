@@ -3,7 +3,6 @@
   <PropertyGroup>
     <!-- Bounded context: the scan/detection engine (scoring, pipeline, imaging/OCR/set-symbol)
          and the diagnostics ScanLog. Depends on Catalog; the heavy CV deps are isolated here. -->
-    <RootNamespace>LupiraMtgApi.Recognition</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
