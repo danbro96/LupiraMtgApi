@@ -26,6 +26,6 @@ public static class ScanFeedbackEndpoints
                 """)
             .Produces<ScanFeedbackResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("SubmitScanFeedback");
 }

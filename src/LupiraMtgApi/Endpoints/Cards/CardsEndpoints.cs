@@ -59,7 +59,7 @@ public static class CardsEndpoints
                 collector number, or prices — see `GET /cards/{oracleId}/printings`.
                 """)
             .Produces<CardResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetCard");
 
         group.MapGet("/{oracleId}/printings", (
@@ -74,7 +74,7 @@ public static class CardsEndpoints
                 Bounded list (no pagination) — even the most-reprinted cards have ~100 printings.
                 """)
             .Produces<CardPrintingListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ListPrintings");
 
         group.MapGet("/{oracleId}/printings/{printingId}", (
@@ -92,7 +92,7 @@ public static class CardsEndpoints
                 Oracle ID (re-run sync if it should exist).
                 """)
             .Produces<CardPrintingResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetPrinting");
 
         group.MapGet("/{oracleId}/printings/{printingId}/prices", (
@@ -112,7 +112,7 @@ public static class CardsEndpoints
                 price points have been recorded for the printing.
                 """)
             .Produces<CardPriceHistoryResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ListPrices");
 
         return app;

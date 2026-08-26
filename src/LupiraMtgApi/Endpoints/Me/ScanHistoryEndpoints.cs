@@ -42,7 +42,7 @@ public static class ScanHistoryEndpoints
                 a "why did the scan match this card?" diagnostic UI without needing OpenObserve.
                 """)
             .Produces<ScanDetailResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetScan");
 
         return app;

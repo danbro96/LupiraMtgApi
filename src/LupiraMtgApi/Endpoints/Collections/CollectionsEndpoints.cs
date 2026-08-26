@@ -26,7 +26,7 @@ public static class CollectionsEndpoints
                 h.GetAsync(ctx, collectionId, ct))
             .WithSummary("Get a collection with its cards.")
             .Produces<CollectionDetailResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetCollection");
 
         group.MapPatch("/{collectionId:guid}", (HttpContext ctx, Guid collectionId, RenameCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -34,14 +34,14 @@ public static class CollectionsEndpoints
             .WithSummary("Rename a collection.")
             .Produces<CollectionResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("UpdateCollection");
 
         group.MapDelete("/{collectionId:guid}", (HttpContext ctx, Guid collectionId, CollectionsHandler h, CancellationToken ct) =>
                 h.DeleteAsync(ctx, collectionId, ct))
             .WithSummary("Soft-delete a collection.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DeleteCollection");
 
         group.MapGet("/{collectionId:guid}/cards", (
@@ -59,7 +59,7 @@ public static class CollectionsEndpoints
                 Response includes `total`.
                 """)
             .Produces<CardInstanceListResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ListCollectionCards");
 
         group.MapPost("/{collectionId:guid}/cards", (HttpContext ctx, Guid collectionId, AddCardToCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -67,14 +67,14 @@ public static class CollectionsEndpoints
             .WithSummary("Add a card to a collection (manual, no scan).")
             .Produces<CardInstanceResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CreateCollectionCard");
 
         group.MapDelete("/{collectionId:guid}/cards/{instanceId:guid}", (HttpContext ctx, Guid collectionId, Guid instanceId, CollectionsHandler h, CancellationToken ct) =>
                 h.RemoveCardAsync(ctx, collectionId, instanceId, ct))
             .WithSummary("Remove a card from a collection.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DeleteCollectionCard");
 
         group.MapPost("/{collectionId:guid}/cards/{instanceId:guid}/move", (HttpContext ctx, Guid collectionId, Guid instanceId, MoveCardRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -82,7 +82,7 @@ public static class CollectionsEndpoints
             .WithSummary("Move a card to another collection.")
             .Produces<CardInstanceResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("MoveCard");
 
         group.MapPost("/{collectionId:guid}/cards/bulk", (HttpContext ctx, Guid collectionId, BulkAddCardsRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -98,7 +98,7 @@ public static class CollectionsEndpoints
                 """)
             .Produces<BulkAddCardsResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("BulkAddCards");
 
         group.MapPost("/{collectionId:guid}/cards/bulk-delete", (HttpContext ctx, Guid collectionId, BulkRemoveCardsRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -111,7 +111,7 @@ public static class CollectionsEndpoints
                 """)
             .Produces<BulkRemoveCardsResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("BulkRemoveCards");
 
         group.MapPost("/{collectionId:guid}/cards/bulk-move", (HttpContext ctx, Guid collectionId, BulkMoveCardsRequest body, CollectionsHandler h, CancellationToken ct) =>
@@ -125,7 +125,7 @@ public static class CollectionsEndpoints
                 """)
             .Produces<BulkMoveCardsResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("BulkMoveCards");
 
         return app;

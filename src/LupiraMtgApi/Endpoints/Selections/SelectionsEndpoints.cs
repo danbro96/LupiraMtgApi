@@ -19,7 +19,7 @@ public static class SelectionsEndpoints
                 h.GetAsync(ctx, selectionId, ct))
             .WithSummary("Get a selection with its current cards.")
             .Produces<SelectionResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetSelection");
 
         group.MapPost("/{selectionId:guid}/cards", (HttpContext ctx, Guid selectionId, AddSelectionEntryRequest body, SelectionsHandler h, CancellationToken ct) =>
@@ -27,7 +27,7 @@ public static class SelectionsEndpoints
             .WithSummary("Add a recognized card to the selection. Returns 409 on duplicate unless allowDuplicate=true.")
             .Produces<SelectionEntryResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("CreateSelectionCard");
 
@@ -35,7 +35,7 @@ public static class SelectionsEndpoints
                 h.RemoveCardAsync(ctx, selectionId, instanceId, ct))
             .WithSummary("Remove a card from the selection.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DeleteSelectionCard");
 
         group.MapPost("/{selectionId:guid}/commit", (HttpContext ctx, Guid selectionId, CommitSelectionRequest body, SelectionsHandler h, CancellationToken ct) =>
@@ -43,7 +43,7 @@ public static class SelectionsEndpoints
             .WithSummary("Commit selection cards into a collection.")
             .Produces<CommitSelectionResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CommitSelection");
 
         return app;
