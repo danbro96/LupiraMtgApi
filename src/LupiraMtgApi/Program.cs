@@ -17,7 +17,7 @@ using LupiraMtgApi.Endpoints.Sets;
 using LupiraMtgApi.Handlers;
 using LupiraMtgApi.Pricing.Data;
 using LupiraMtgApi.Recognition.Data;
-using LupiraMtgApi.Sync;
+using LupiraMtgApi.Workers;
 using Marten;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;

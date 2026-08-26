@@ -1,7 +1,7 @@
 using Cronos;
 using Microsoft.Extensions.Options;
 
-namespace LupiraMtgApi.Sync;
+namespace LupiraMtgApi.Workers;
 
 public sealed class ScryfallSyncJob : BackgroundService
 {

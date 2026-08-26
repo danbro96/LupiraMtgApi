@@ -11,7 +11,7 @@ using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-namespace LupiraMtgApi.Sync;
+namespace LupiraMtgApi.Workers;
 
 public sealed class ScryfallSyncRunner
 {
@@ -21,8 +21,8 @@ public sealed class ScryfallSyncRunner
     // (sync.run → sync.sets, sync.set_icons, sync.printings); the meter exposes
     // throughput so dashboards can chart printings/sec or icon-fetches/sec over
     // a sync run, and counters track outcome totals across runs.
-    private static readonly ActivitySource SyncActivity = new("LupiraMtgApi.Sync");
-    private static readonly Meter SyncMeter = new("LupiraMtgApi.Sync");
+    private static readonly ActivitySource SyncActivity = new("LupiraMtgApi.Workers");
+    private static readonly Meter SyncMeter = new("LupiraMtgApi.Workers");
     private static readonly Histogram<double> SyncDurationHist = SyncMeter.CreateHistogram<double>("scryfall.sync.duration_ms", unit: "ms", description: "End-to-end sync run time");
     private static readonly Histogram<double> SetsPhaseHist = SyncMeter.CreateHistogram<double>("scryfall.sync.sets.duration_ms", unit: "ms", description: "Set metadata upsert phase");
     private static readonly Histogram<double> IconsPhaseHist = SyncMeter.CreateHistogram<double>("scryfall.sync.set_icons.duration_ms", unit: "ms", description: "Per-set SVG download + rasterize phase");

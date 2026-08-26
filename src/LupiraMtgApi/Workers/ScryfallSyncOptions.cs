@@ -1,4 +1,4 @@
-namespace LupiraMtgApi.Sync;
+namespace LupiraMtgApi.Workers;
 
 public sealed class ScryfallSyncOptions
 {
