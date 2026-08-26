@@ -1,6 +1,6 @@
 namespace LupiraMtgApi.Catalog.Dtos.Cards;
 
-public sealed class CardResponse
+public sealed class CardDto
 {
     public required string OracleId { get; set; }
 
@@ -28,5 +28,5 @@ public sealed class CardResponse
 
     // Multi-faced card data at oracle level — null for normal single-faced cards. The
     // representative printing's faces drive this; image URLs come from that printing.
-    public required IReadOnlyList<CardFaceResponse>? Faces { get; set; }
+    public required IReadOnlyList<CardFaceDto>? Faces { get; set; }
 }

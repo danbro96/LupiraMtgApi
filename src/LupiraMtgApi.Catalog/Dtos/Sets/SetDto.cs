@@ -1,6 +1,6 @@
 namespace LupiraMtgApi.Catalog.Dtos.Sets;
 
-public sealed class SetResponse
+public sealed class SetDto
 {
     public required string Code { get; set; }
 

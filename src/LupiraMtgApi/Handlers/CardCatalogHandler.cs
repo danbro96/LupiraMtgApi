@@ -17,7 +17,7 @@ public sealed class CardCatalogHandler
     public async Task<Ok<CardListResponse>> ListCardsAsync(CardListQuery query, CancellationToken ct) =>
         TypedResults.Ok(await _service.ListCardsAsync(ToRequest(query), ct));
 
-    public async Task<Results<Ok<CardResponse>, NotFound>> GetCardAsync(string oracleId, CancellationToken ct)
+    public async Task<Results<Ok<CardDto>, NotFound>> GetCardAsync(string oracleId, CancellationToken ct)
     {
         var card = await _service.GetCardAsync(oracleId, ct);
         return card is null ? TypedResults.NotFound() : TypedResults.Ok(card);
@@ -29,7 +29,7 @@ public sealed class CardCatalogHandler
         return list is null ? TypedResults.NotFound() : TypedResults.Ok(list);
     }
 
-    public async Task<Results<Ok<CardPrintingResponse>, NotFound>> GetPrintingAsync(string oracleId, string printingId, CancellationToken ct)
+    public async Task<Results<Ok<CardPrintingDto>, NotFound>> GetPrintingAsync(string oracleId, string printingId, CancellationToken ct)
     {
         var printing = await _service.GetPrintingAsync(oracleId, printingId, ct);
         return printing is null ? TypedResults.NotFound() : TypedResults.Ok(printing);

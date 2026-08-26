@@ -2,9 +2,9 @@ using LupiraMtgApi.Catalog.Dtos.Cards;
 
 namespace LupiraMtgApi.Recognition.Dtos;
 
-public sealed class CardCandidateResponse
+public sealed class CardCandidateDto
 {
-    public required CardPrintingResponse Printing { get; set; }
+    public required CardPrintingDto Printing { get; set; }
 
     public required double CombinedScore { get; set; }
 

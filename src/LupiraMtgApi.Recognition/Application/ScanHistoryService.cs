@@ -79,18 +79,18 @@ public sealed class ScanHistoryService
 
         var prices = await _prices.GetAsync(printingsById.Keys, ct);
 
-        var results = new List<ScanSummaryResponse>(docs.Count);
+        var results = new List<ScanSummaryDto>(docs.Count);
         foreach (var doc in docs)
         {
             var topCandidate = doc.Candidates.FirstOrDefault();
-            CardPrintingResponse? topMatch = null;
+            CardPrintingDto? topMatch = null;
             if (topCandidate is not null && printingsById.TryGetValue(topCandidate.PrintingId, out var printing))
             {
                 var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
                 topMatch = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
             }
 
-            results.Add(new ScanSummaryResponse
+            results.Add(new ScanSummaryDto
             {
                 Id = doc.Id,
                 ScannedAt = doc.ScannedAt,
@@ -132,7 +132,7 @@ public sealed class ScanHistoryService
 
         var prices = await _prices.GetAsync(printingsById.Keys, ct);
 
-        var candidates = new List<CardCandidateResponse>(doc.Candidates.Count);
+        var candidates = new List<CardCandidateDto>(doc.Candidates.Count);
         foreach (var c in doc.Candidates)
         {
             if (!printingsById.TryGetValue(c.PrintingId, out var printing))
@@ -142,7 +142,7 @@ public sealed class ScanHistoryService
             }
 
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
-            candidates.Add(new CardCandidateResponse
+            candidates.Add(new CardCandidateDto
             {
                 Printing = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct),
                 CombinedScore = c.CombinedScore,

@@ -58,7 +58,7 @@ public static class CardsEndpoints
                 and a representative thumbnail. Does **not** return printing-specific data such as set,
                 collector number, or prices — see `GET /cards/{oracleId}/printings`.
                 """)
-            .Produces<CardResponse>(StatusCodes.Status200OK)
+            .Produces<CardDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetCard");
 
@@ -91,7 +91,7 @@ public static class CardsEndpoints
                 is unknown to the local catalog or if `oracleId` does not match the printing's
                 Oracle ID (re-run sync if it should exist).
                 """)
-            .Produces<CardPrintingResponse>(StatusCodes.Status200OK)
+            .Produces<CardPrintingDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetPrinting");
 

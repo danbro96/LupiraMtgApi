@@ -53,7 +53,7 @@ public sealed class SetService
         var total = await query.CountAsync(ct);
         var rows = await query.Skip(clampedSkip).Take(clampedTake).ToListAsync(ct);
 
-        var results = new List<SetResponse>(rows.Count);
+        var results = new List<SetDto>(rows.Count);
         foreach (var row in rows)
         {
             results.Add(await MapAsync(row, ct));
@@ -62,7 +62,7 @@ public sealed class SetService
         return new SetListResponse { Results = results, Total = total };
     }
 
-    public async Task<SetResponse?> GetByCodeAsync(string code, CancellationToken ct)
+    public async Task<SetDto?> GetByCodeAsync(string code, CancellationToken ct)
     {
         var canonical = code.ToLowerInvariant();
         var set = await _db.Sets.AsNoTracking().FirstOrDefaultAsync(s => s.Code == canonical, ct);
@@ -74,7 +74,7 @@ public sealed class SetService
         return await MapAsync(set, ct);
     }
 
-    private async Task<SetResponse> MapAsync(ScryfallSet set, CancellationToken ct)
+    private async Task<SetDto> MapAsync(ScryfallSet set, CancellationToken ct)
     {
         string? iconUrl = null;
         if (set.IconObjectKey is { Length: > 0 })
@@ -82,7 +82,7 @@ public sealed class SetService
             iconUrl = await _images.CreatePresignedGetUrlAsync(set.IconObjectKey, IconPresignExpiry, ct);
         }
 
-        return new SetResponse
+        return new SetDto
         {
             Code = set.Code,
             Name = set.Name,

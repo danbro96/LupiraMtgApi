@@ -1,6 +1,6 @@
 namespace LupiraMtgApi.Pricing.Dtos;
 
-public sealed class CardPricePointResponse
+public sealed class CardPricePointDto
 {
     public required DateOnly ObservedOn { get; set; }
 

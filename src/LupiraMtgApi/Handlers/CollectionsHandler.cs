@@ -27,7 +27,7 @@ public sealed class CollectionsHandler
         return TypedResults.Ok(await _service.ListAsync(ownerId, ct));
     }
 
-    public async Task<Results<Ok<CollectionResponse>, ProblemHttpResult, UnauthorizedHttpResult>> CreateAsync(
+    public async Task<Results<Ok<CollectionDto>, ProblemHttpResult, UnauthorizedHttpResult>> CreateAsync(
         HttpContext httpContext,
         CreateCollectionRequest request,
         CancellationToken ct)
@@ -57,7 +57,7 @@ public sealed class CollectionsHandler
         return detail is null ? TypedResults.NotFound() : TypedResults.Ok(detail);
     }
 
-    public async Task<Results<Ok<CollectionResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> RenameAsync(
+    public async Task<Results<Ok<CollectionDto>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> RenameAsync(
         HttpContext httpContext,
         Guid collectionId,
         RenameCollectionRequest request,
@@ -102,7 +102,7 @@ public sealed class CollectionsHandler
         return list is null ? TypedResults.NotFound() : TypedResults.Ok(list);
     }
 
-    public async Task<Results<Ok<CardInstanceResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> AddCardAsync(
+    public async Task<Results<Ok<CardInstanceDto>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> AddCardAsync(
         HttpContext httpContext,
         Guid collectionId,
         AddCardToCollectionRequest request,
@@ -132,7 +132,7 @@ public sealed class CollectionsHandler
             : TypedResults.NotFound();
     }
 
-    public async Task<Results<Ok<CardInstanceResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> MoveCardAsync(
+    public async Task<Results<Ok<CardInstanceDto>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> MoveCardAsync(
         HttpContext httpContext,
         Guid collectionId,
         Guid instanceId,

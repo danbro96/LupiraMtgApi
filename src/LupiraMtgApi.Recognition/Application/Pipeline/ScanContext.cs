@@ -64,7 +64,7 @@ public sealed record ScanContext
     public IReadOnlyList<RankedCandidate> TopRanked { get; init; } = Array.Empty<RankedCandidate>();
 
     /// <summary>Hydrated response candidates, aligned by index with HydratedRows.</summary>
-    public IReadOnlyList<CardCandidateResponse> Ranked { get; init; } = Array.Empty<CardCandidateResponse>();
+    public IReadOnlyList<CardCandidateDto> Ranked { get; init; } = Array.Empty<CardCandidateDto>();
 
     /// <summary>Source RankedCandidate per emitted Ranked entry; alignment preserved by HydrateStep so ConfidenceStep can derive zone agreement from the matched row.</summary>
     public IReadOnlyList<RankedCandidate> HydratedRows { get; init; } = Array.Empty<RankedCandidate>();

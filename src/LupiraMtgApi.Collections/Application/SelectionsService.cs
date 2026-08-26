@@ -58,12 +58,12 @@ public sealed class SelectionsService
         return await this.MapAsync(doc, ct);
     }
 
-    public async Task<Op<SelectionEntryResponse>> AddCardAsync(string ownerId, Guid selectionId, AddSelectionEntryRequest request, CancellationToken ct)
+    public async Task<Op<SelectionEntryDto>> AddCardAsync(string ownerId, Guid selectionId, AddSelectionEntryRequest request, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(selectionId, ownerId, ct);
         if (doc is null)
         {
-            return Op<SelectionEntryResponse>.NotFound();
+            return Op<SelectionEntryDto>.NotFound();
         }
 
         var printing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
@@ -72,7 +72,7 @@ public sealed class SelectionsService
             ct);
         if (printing is null)
         {
-            return Op<SelectionEntryResponse>.Invalid("Unknown printing id.");
+            return Op<SelectionEntryDto>.Invalid("Unknown printing id.");
         }
 
         var language = string.IsNullOrEmpty(request.Language) ? "en" : request.Language;
@@ -86,7 +86,7 @@ public sealed class SelectionsService
                 string.Equals(c.Language, language, StringComparison.OrdinalIgnoreCase));
             if (clash)
             {
-                return Op<SelectionEntryResponse>.Conflict("Already in selection. Pass allowDuplicate=true to add another copy.");
+                return Op<SelectionEntryDto>.Conflict("Already in selection. Pass allowDuplicate=true to add another copy.");
             }
         }
 
@@ -105,7 +105,7 @@ public sealed class SelectionsService
         await _session.SaveChangesAsync(ct);
 
         var hydrated = await _hydrator.HydrateSelectionAsync(new[] { entry }, ct);
-        return Op<SelectionEntryResponse>.Ok(hydrated.Single());
+        return Op<SelectionEntryDto>.Ok(hydrated.Single());
     }
 
     public async Task<bool> RemoveCardAsync(string ownerId, Guid selectionId, Guid instanceId, CancellationToken ct)

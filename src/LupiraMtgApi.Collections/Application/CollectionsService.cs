@@ -40,7 +40,7 @@ public sealed class CollectionsService
             ct);
 
         var responses = docs
-            .Select(d => new CollectionResponse
+            .Select(d => new CollectionDto
             {
                 Id = d.Id,
                 Name = d.Name,
@@ -53,12 +53,12 @@ public sealed class CollectionsService
         return new CollectionListResponse { Collections = responses };
     }
 
-    public async Task<Op<CollectionResponse>> CreateAsync(string ownerId, CreateCollectionRequest request, CancellationToken ct)
+    public async Task<Op<CollectionDto>> CreateAsync(string ownerId, CreateCollectionRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
         if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
         {
-            return Op<CollectionResponse>.Invalid($"Name must be 1..{MaxNameLength} characters.");
+            return Op<CollectionDto>.Invalid($"Name must be 1..{MaxNameLength} characters.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -75,7 +75,7 @@ public sealed class CollectionsService
         _session.Store(doc);
         await _session.SaveChangesAsync(ct);
 
-        return Op<CollectionResponse>.Ok(new CollectionResponse
+        return Op<CollectionDto>.Ok(new CollectionDto
         {
             Id = doc.Id,
             Name = doc.Name,
@@ -105,18 +105,18 @@ public sealed class CollectionsService
         };
     }
 
-    public async Task<Op<CollectionResponse>> RenameAsync(string ownerId, Guid collectionId, RenameCollectionRequest request, CancellationToken ct)
+    public async Task<Op<CollectionDto>> RenameAsync(string ownerId, Guid collectionId, RenameCollectionRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
         if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
         {
-            return Op<CollectionResponse>.Invalid($"Name must be 1..{MaxNameLength} characters.");
+            return Op<CollectionDto>.Invalid($"Name must be 1..{MaxNameLength} characters.");
         }
 
         var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
-            return Op<CollectionResponse>.NotFound();
+            return Op<CollectionDto>.NotFound();
         }
 
         doc.Name = name;
@@ -124,7 +124,7 @@ public sealed class CollectionsService
         _session.Store(doc);
         await _session.SaveChangesAsync(ct);
 
-        return Op<CollectionResponse>.Ok(new CollectionResponse
+        return Op<CollectionDto>.Ok(new CollectionDto
         {
             Id = doc.Id,
             Name = doc.Name,
@@ -166,7 +166,7 @@ public sealed class CollectionsService
         {
             return new CardInstanceListResponse
             {
-                Cards = Array.Empty<CardInstanceResponse>(),
+                Cards = Array.Empty<CardInstanceDto>(),
                 Total = 0,
             };
         }
@@ -186,12 +186,12 @@ public sealed class CollectionsService
         return new CardInstanceListResponse { Cards = cards, Total = total };
     }
 
-    public async Task<Op<CardInstanceResponse>> AddCardAsync(string ownerId, Guid collectionId, AddCardToCollectionRequest request, CancellationToken ct)
+    public async Task<Op<CardInstanceDto>> AddCardAsync(string ownerId, Guid collectionId, AddCardToCollectionRequest request, CancellationToken ct)
     {
         var doc = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (doc is null)
         {
-            return Op<CardInstanceResponse>.NotFound();
+            return Op<CardInstanceDto>.NotFound();
         }
 
         var printing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
@@ -200,7 +200,7 @@ public sealed class CollectionsService
             ct);
         if (printing is null)
         {
-            return Op<CardInstanceResponse>.Invalid("Unknown printing id.");
+            return Op<CardInstanceDto>.Invalid("Unknown printing id.");
         }
 
         var instance = new CardInstance
@@ -219,7 +219,7 @@ public sealed class CollectionsService
         await _session.SaveChangesAsync(ct);
 
         var hydrated = await _hydrator.HydrateAsync(new[] { instance }, doc.Id, doc.Name, ct);
-        return Op<CardInstanceResponse>.Ok(hydrated.Single());
+        return Op<CardInstanceDto>.Ok(hydrated.Single());
     }
 
     public async Task<bool> RemoveCardAsync(string ownerId, Guid collectionId, Guid instanceId, CancellationToken ct)
@@ -242,29 +242,29 @@ public sealed class CollectionsService
         return true;
     }
 
-    public async Task<Op<CardInstanceResponse>> MoveCardAsync(string ownerId, Guid collectionId, Guid instanceId, MoveCardRequest request, CancellationToken ct)
+    public async Task<Op<CardInstanceDto>> MoveCardAsync(string ownerId, Guid collectionId, Guid instanceId, MoveCardRequest request, CancellationToken ct)
     {
         if (request.ToCollectionId == collectionId)
         {
-            return Op<CardInstanceResponse>.Invalid("Source and destination collections are the same.");
+            return Op<CardInstanceDto>.Invalid("Source and destination collections are the same.");
         }
 
         var source = await this.LoadOwnedAsync(collectionId, ownerId, ct);
         if (source is null)
         {
-            return Op<CardInstanceResponse>.NotFound();
+            return Op<CardInstanceDto>.NotFound();
         }
 
         var destination = await this.LoadOwnedAsync(request.ToCollectionId, ownerId, ct);
         if (destination is null)
         {
-            return Op<CardInstanceResponse>.NotFound();
+            return Op<CardInstanceDto>.NotFound();
         }
 
         var card = source.Cards.FirstOrDefault(c => c.InstanceId == instanceId);
         if (card is null)
         {
-            return Op<CardInstanceResponse>.NotFound();
+            return Op<CardInstanceDto>.NotFound();
         }
 
         source.Cards.RemoveAll(c => c.InstanceId == instanceId);
@@ -278,7 +278,7 @@ public sealed class CollectionsService
         await _session.SaveChangesAsync(ct);
 
         var hydrated = await _hydrator.HydrateAsync(new[] { card }, destination.Id, destination.Name, ct);
-        return Op<CardInstanceResponse>.Ok(hydrated.Single());
+        return Op<CardInstanceDto>.Ok(hydrated.Single());
     }
 
     public async Task<Op<BulkAddCardsResponse>> BulkAddCardsAsync(string ownerId, Guid collectionId, BulkAddCardsRequest request, CancellationToken ct)

@@ -18,7 +18,7 @@ public static class CollectionsEndpoints
         group.MapPost("/", (HttpContext ctx, CreateCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>
                 h.CreateAsync(ctx, body, ct))
             .WithSummary("Create a new collection.")
-            .Produces<CollectionResponse>(StatusCodes.Status200OK)
+            .Produces<CollectionDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("CreateCollection");
 
@@ -32,7 +32,7 @@ public static class CollectionsEndpoints
         group.MapPatch("/{collectionId:guid}", (HttpContext ctx, Guid collectionId, RenameCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>
                 h.RenameAsync(ctx, collectionId, body, ct))
             .WithSummary("Rename a collection.")
-            .Produces<CollectionResponse>(StatusCodes.Status200OK)
+            .Produces<CollectionDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("UpdateCollection");
@@ -65,7 +65,7 @@ public static class CollectionsEndpoints
         group.MapPost("/{collectionId:guid}/cards", (HttpContext ctx, Guid collectionId, AddCardToCollectionRequest body, CollectionsHandler h, CancellationToken ct) =>
                 h.AddCardAsync(ctx, collectionId, body, ct))
             .WithSummary("Add a card to a collection (manual, no scan).")
-            .Produces<CardInstanceResponse>(StatusCodes.Status200OK)
+            .Produces<CardInstanceDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CreateCollectionCard");
@@ -80,7 +80,7 @@ public static class CollectionsEndpoints
         group.MapPost("/{collectionId:guid}/cards/{instanceId:guid}/move", (HttpContext ctx, Guid collectionId, Guid instanceId, MoveCardRequest body, CollectionsHandler h, CancellationToken ct) =>
                 h.MoveCardAsync(ctx, collectionId, instanceId, body, ct))
             .WithSummary("Move a card to another collection.")
-            .Produces<CardInstanceResponse>(StatusCodes.Status200OK)
+            .Produces<CardInstanceDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("MoveCard");
@@ -92,7 +92,7 @@ public static class CollectionsEndpoints
                 """
                 Body: `{ items: [{ printingId, isFoil?, language?, condition?, count? }] }`.
                 Per-item `count` is clamped to 1..50; total instances per call capped at 500.
-                Returns the newly-created `CardInstanceResponse` rows in the same order they
+                Returns the newly-created `CardInstanceDto` rows in the same order they
                 were generated. Validates every `printingId` up front — if any is unknown the
                 whole call is rejected with `400`, no partial writes.
                 """)

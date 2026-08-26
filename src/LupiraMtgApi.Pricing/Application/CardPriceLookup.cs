@@ -17,14 +17,14 @@ public sealed class CardPriceLookup
         _db = db;
     }
 
-    public async Task<IReadOnlyDictionary<string, CardPriceResponse>> GetAsync(
+    public async Task<IReadOnlyDictionary<string, CardPriceDto>> GetAsync(
         IEnumerable<string> printingIds,
         CancellationToken ct)
     {
         var ids = printingIds.Distinct().ToList();
         if (ids.Count == 0)
         {
-            return new Dictionary<string, CardPriceResponse>();
+            return new Dictionary<string, CardPriceDto>();
         }
 
         return await _db.CardPricesLatest
@@ -32,7 +32,7 @@ public sealed class CardPriceLookup
             .Where(p => ids.Contains(p.PrintingId))
             .ToDictionaryAsync(
                 p => p.PrintingId,
-                p => new CardPriceResponse
+                p => new CardPriceDto
                 {
                     Eur = p.Eur,
                     EurFoil = p.EurFoil,

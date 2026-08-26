@@ -9,7 +9,7 @@ namespace LupiraMtgApi.Recognition.Application.Steps;
 
 /// <summary>
 /// Loads CardPrinting + set name for the top-N ranked candidates and produces the
-/// <see cref="CardCandidateResponse"/> list returned to the client. Skips candidates
+/// <see cref="CardCandidateDto"/> list returned to the client. Skips candidates
 /// whose printing isn't in the DB (defensive against the printing being GC'd between
 /// pHash index build and scan time). Preserves index alignment between
 /// <see cref="ScanContext.Ranked"/> and <see cref="ScanContext.HydratedRows"/> so
@@ -56,7 +56,7 @@ public sealed class HydrateStep : IScanStep
 
         var prices = await _prices.GetAsync(printings.Select(p => p.Id), ct);
 
-        var ranked = new List<CardCandidateResponse>(ctx.TopRanked.Count);
+        var ranked = new List<CardCandidateDto>(ctx.TopRanked.Count);
         var hydratedRows = new List<RankedCandidate>(ctx.TopRanked.Count);
 
         foreach (var row in ctx.TopRanked)
@@ -69,7 +69,7 @@ public sealed class HydrateStep : IScanStep
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
             var printingResponse = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
 
-            ranked.Add(new CardCandidateResponse
+            ranked.Add(new CardCandidateDto
             {
                 Printing = printingResponse,
                 CombinedScore = row.FinalScore,

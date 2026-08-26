@@ -26,7 +26,7 @@ public sealed class CardInstanceHydrator
         _prices = prices;
     }
 
-    public async Task<List<CardInstanceResponse>> HydrateAsync(
+    public async Task<List<CardInstanceDto>> HydrateAsync(
         IReadOnlyList<CardInstance> cards,
         Guid? collectionId,
         string? collectionName,
@@ -34,14 +34,14 @@ public sealed class CardInstanceHydrator
     {
         if (cards.Count == 0)
         {
-            return new List<CardInstanceResponse>();
+            return new List<CardInstanceDto>();
         }
 
         var byPrintingId = await this.LoadPrintingsAsync(cards.Select(c => c.PrintingId), ct);
         var setNames = await this.LoadSetNamesAsync(byPrintingId.Values, ct);
         var prices = await _prices.GetAsync(byPrintingId.Keys, ct);
 
-        var result = new List<CardInstanceResponse>(cards.Count);
+        var result = new List<CardInstanceDto>(cards.Count);
         foreach (var card in cards)
         {
             if (!byPrintingId.TryGetValue(card.PrintingId, out var printing))
@@ -52,7 +52,7 @@ public sealed class CardInstanceHydrator
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
             var printingResponse = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
 
-            result.Add(new CardInstanceResponse
+            result.Add(new CardInstanceDto
             {
                 InstanceId = card.InstanceId,
                 Printing = printingResponse,
@@ -68,20 +68,20 @@ public sealed class CardInstanceHydrator
         return result;
     }
 
-    public async Task<List<SelectionEntryResponse>> HydrateSelectionAsync(
+    public async Task<List<SelectionEntryDto>> HydrateSelectionAsync(
         IReadOnlyList<SelectionEntry> entries,
         CancellationToken ct)
     {
         if (entries.Count == 0)
         {
-            return new List<SelectionEntryResponse>();
+            return new List<SelectionEntryDto>();
         }
 
         var byPrintingId = await this.LoadPrintingsAsync(entries.Select(e => e.PrintingId), ct);
         var setNames = await this.LoadSetNamesAsync(byPrintingId.Values, ct);
         var prices = await _prices.GetAsync(byPrintingId.Keys, ct);
 
-        var result = new List<SelectionEntryResponse>(entries.Count);
+        var result = new List<SelectionEntryDto>(entries.Count);
         foreach (var entry in entries)
         {
             if (!byPrintingId.TryGetValue(entry.PrintingId, out var printing))
@@ -92,7 +92,7 @@ public sealed class CardInstanceHydrator
             var setName = setNames.GetValueOrDefault(printing.SetCode, printing.SetCode);
             var printingResponse = await _mapper.MapAsync(printing, setName, prices.GetValueOrDefault(printing.Id), ct);
 
-            result.Add(new SelectionEntryResponse
+            result.Add(new SelectionEntryDto
             {
                 InstanceId = entry.InstanceId,
                 Printing = printingResponse,

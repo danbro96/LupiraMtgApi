@@ -26,16 +26,16 @@ public sealed class CardPrintingMapper
             : null,
     };
 
-    public async Task<CardPrintingResponse> MapAsync(
+    public async Task<CardPrintingDto> MapAsync(
         CardPrinting printing,
         string setName,
-        CardPriceResponse? price,
+        CardPriceDto? price,
         CancellationToken ct)
     {
         var imageUrls = await MapImagesAsync(printing, ct);
         var faces = await MapFacesAsync(printing.Faces, ct);
 
-        return new CardPrintingResponse
+        return new CardPrintingDto
         {
             Id = printing.Id,
             OracleId = printing.OracleId,
@@ -53,7 +53,7 @@ public sealed class CardPrintingMapper
         };
     }
 
-    public async Task<IReadOnlyList<CardFaceResponse>?> MapFacesAsync(
+    public async Task<IReadOnlyList<CardFaceDto>?> MapFacesAsync(
         IReadOnlyList<CardFace>? faces,
         CancellationToken ct)
     {
@@ -62,7 +62,7 @@ public sealed class CardPrintingMapper
             return null;
         }
 
-        var result = new List<CardFaceResponse>(faces.Count);
+        var result = new List<CardFaceDto>(faces.Count);
         foreach (var face in faces.OrderBy(f => f.FaceIndex))
         {
             CardImageUrls? faceImages = null;
@@ -79,7 +79,7 @@ public sealed class CardPrintingMapper
                 };
             }
 
-            result.Add(new CardFaceResponse
+            result.Add(new CardFaceDto
             {
                 FaceIndex = face.FaceIndex,
                 Name = face.Name,

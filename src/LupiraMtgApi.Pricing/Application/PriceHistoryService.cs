@@ -39,7 +39,7 @@ public sealed class PriceHistoryService
 
         var points = await query
             .OrderBy(p => p.ObservedOn)
-            .Select(p => new CardPricePointResponse
+            .Select(p => new CardPricePointDto
             {
                 ObservedOn = p.ObservedOn,
                 Eur = p.Eur,

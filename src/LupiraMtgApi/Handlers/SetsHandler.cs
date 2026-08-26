@@ -19,7 +19,7 @@ public sealed class SetsHandler
         CancellationToken ct) =>
         TypedResults.Ok(await _service.ListAsync(setType, sort, order, take, skip, ct));
 
-    public async Task<Results<Ok<SetResponse>, NotFound>> GetByCodeAsync(string code, CancellationToken ct)
+    public async Task<Results<Ok<SetDto>, NotFound>> GetByCodeAsync(string code, CancellationToken ct)
     {
         var set = await _service.GetByCodeAsync(code, ct);
         return set is null ? TypedResults.NotFound() : TypedResults.Ok(set);

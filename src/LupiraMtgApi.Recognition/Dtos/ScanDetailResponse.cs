@@ -17,7 +17,7 @@ public sealed class ScanDetailResponse
 
     public required ScanSetSymbol? SetSymbol { get; set; }
 
-    public required IReadOnlyList<CardCandidateResponse> Candidates { get; set; }
+    public required IReadOnlyList<CardCandidateDto> Candidates { get; set; }
 
     public required ScanFeedbackInfo? Feedback { get; set; }
 }

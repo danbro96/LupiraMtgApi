@@ -2,7 +2,7 @@ using LupiraMtgApi.Pricing.Dtos;
 
 namespace LupiraMtgApi.Catalog.Dtos.Cards;
 
-public sealed class CardPrintingResponse
+public sealed class CardPrintingDto
 {
     public required string Id { get; set; }
 
@@ -26,10 +26,10 @@ public sealed class CardPrintingResponse
 
     public required CardImageUrls? Images { get; set; }
 
-    public required CardPriceResponse? Prices { get; set; }
+    public required CardPriceDto? Prices { get; set; }
 
     // Multi-faced card data — null for normal single-faced cards. Each face has its own
     // name, type line, oracle text, P/T, and (when applicable) a presigned image. Front
     // face is also mirrored to the top-level `name`/`images` fields for back-compat.
-    public required IReadOnlyList<CardFaceResponse>? Faces { get; set; }
+    public required IReadOnlyList<CardFaceDto>? Faces { get; set; }
 }

@@ -2,11 +2,11 @@ using LupiraMtgApi.Catalog.Dtos.Cards;
 
 namespace LupiraMtgApi.Collections.Dtos;
 
-public sealed class CardInstanceResponse
+public sealed class CardInstanceDto
 {
     public required Guid InstanceId { get; set; }
 
-    public required CardPrintingResponse Printing { get; set; }
+    public required CardPrintingDto Printing { get; set; }
 
     public required bool IsFoil { get; set; }
 

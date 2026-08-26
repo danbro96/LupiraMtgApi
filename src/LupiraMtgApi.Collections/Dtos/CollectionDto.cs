@@ -1,6 +1,6 @@
 namespace LupiraMtgApi.Collections.Dtos;
 
-public sealed class CollectionResponse
+public sealed class CollectionDto
 {
     public required Guid Id { get; set; }
 

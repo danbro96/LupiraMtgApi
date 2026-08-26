@@ -20,7 +20,7 @@ public sealed class SetTypeWeightService
             .AsNoTracking()
             .OrderByDescending(w => w.Weight)
             .ThenBy(w => w.SetType)
-            .Select(w => new SetTypeWeightResponse
+            .Select(w => new SetTypeWeightDto
             {
                 SetType = w.SetType,
                 Weight = w.Weight,
@@ -36,7 +36,7 @@ public sealed class SetTypeWeightService
     /// (trimmed, lower-cased, 1..32 chars) and <paramref name="weight"/> validated finite and
     /// non-negative by the caller — input validation is a transport concern owned by the host adapter.
     /// </summary>
-    public async Task<SetTypeWeightResponse> UpsertAsync(string setType, double weight, CancellationToken ct)
+    public async Task<SetTypeWeightDto> UpsertAsync(string setType, double weight, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var existing = await _db.SetTypeWeights.FindAsync(new object?[] { setType }, ct);
@@ -58,7 +58,7 @@ public sealed class SetTypeWeightService
 
         await _db.SaveChangesAsync(ct);
 
-        return new SetTypeWeightResponse
+        return new SetTypeWeightDto
         {
             SetType = existing.SetType,
             Weight = existing.Weight,

@@ -31,7 +31,7 @@ public sealed class CardCatalogService
         var rows = await QueryRepresentativesAsync(filters, ct);
         var total = await CountOraclesAsync(filters, ct);
 
-        var results = new List<CardResponse>(rows.Count);
+        var results = new List<CardDto>(rows.Count);
         foreach (var row in rows)
         {
             results.Add(await BuildCardResponseAsync(row, ct));
@@ -116,7 +116,7 @@ public sealed class CardCatalogService
         Relevance,
     }
 
-    public async Task<CardResponse?> GetCardAsync(string oracleId, CancellationToken ct)
+    public async Task<CardDto?> GetCardAsync(string oracleId, CancellationToken ct)
     {
         var row = await QueryRepresentativeAsync(oracleId, ct);
         if (row is null)
@@ -160,7 +160,7 @@ public sealed class CardCatalogService
 
         var prices = await _prices.GetAsync(printings.Select(p => p.Id), ct);
 
-        var results = new List<CardPrintingResponse>(printings.Count);
+        var results = new List<CardPrintingDto>(printings.Count);
         foreach (var printing in printings)
         {
             var setName = sets.TryGetValue(printing.SetCode, out var s) ? s.Name : printing.SetCode;
@@ -170,7 +170,7 @@ public sealed class CardCatalogService
         return new CardPrintingListResponse { Results = results };
     }
 
-    public async Task<CardPrintingResponse?> GetPrintingAsync(
+    public async Task<CardPrintingDto?> GetPrintingAsync(
         string oracleId,
         string printingId,
         CancellationToken ct)
@@ -195,7 +195,7 @@ public sealed class CardCatalogService
         return response;
     }
 
-    private async Task<CardResponse> BuildCardResponseAsync(RepresentativeRow row, CancellationToken ct)
+    private async Task<CardDto> BuildCardResponseAsync(RepresentativeRow row, CancellationToken ct)
     {
         var printing = new CardPrinting
         {
@@ -216,7 +216,7 @@ public sealed class CardCatalogService
         var faces = await _mapper.MapFacesAsync(row.Faces, ct);
         var typeLine = ComposeTypeLine(row.Supertype, row.Type, row.Subtype);
 
-        return new CardResponse
+        return new CardDto
         {
             OracleId = row.OracleId,
             Name = row.Name,

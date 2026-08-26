@@ -40,7 +40,7 @@ public sealed class MyCardsService
         {
             return new CardInstanceListResponse
             {
-                Cards = Array.Empty<CardInstanceResponse>(),
+                Cards = Array.Empty<CardInstanceDto>(),
                 Total = 0,
             };
         }

@@ -6,7 +6,7 @@ public sealed class CollectionDetailResponse
 
     public required string Name { get; set; }
 
-    public required IReadOnlyList<CardInstanceResponse> Cards { get; set; }
+    public required IReadOnlyList<CardInstanceDto> Cards { get; set; }
 
     public required DateTimeOffset CreatedAt { get; set; }
 

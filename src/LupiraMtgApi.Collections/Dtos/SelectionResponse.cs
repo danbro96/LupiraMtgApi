@@ -4,7 +4,7 @@ public sealed class SelectionResponse
 {
     public required Guid Id { get; set; }
 
-    public required IReadOnlyList<SelectionEntryResponse> Cards { get; set; }
+    public required IReadOnlyList<SelectionEntryDto> Cards { get; set; }
 
     public required DateTimeOffset CreatedAt { get; set; }
 

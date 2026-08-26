@@ -25,7 +25,7 @@ public static class SelectionsEndpoints
         group.MapPost("/{selectionId:guid}/cards", (HttpContext ctx, Guid selectionId, AddSelectionEntryRequest body, SelectionsHandler h, CancellationToken ct) =>
                 h.AddCardAsync(ctx, selectionId, body, ct))
             .WithSummary("Add a recognized card to the selection. Returns 409 on duplicate unless allowDuplicate=true.")
-            .Produces<SelectionEntryResponse>(StatusCodes.Status200OK)
+            .Produces<SelectionEntryDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)

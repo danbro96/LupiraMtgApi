@@ -32,7 +32,7 @@ public static class SetTypeWeightsEndpoints
 
                 The change takes effect on the *next* scan; the ranker reads weights per request.
                 """)
-            .Produces<SetTypeWeightResponse>(StatusCodes.Status200OK)
+            .Produces<SetTypeWeightDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("UpdateSetTypeWeight");
 

@@ -17,7 +17,7 @@ public sealed class SetTypeWeightHandler
     public async Task<Ok<SetTypeWeightListResponse>> ListAsync(CancellationToken ct) =>
         TypedResults.Ok(await _service.ListAsync(ct));
 
-    public async Task<Results<Ok<SetTypeWeightResponse>, ProblemHttpResult>> UpsertAsync(
+    public async Task<Results<Ok<SetTypeWeightDto>, ProblemHttpResult>> UpsertAsync(
         string setType,
         UpdateSetTypeWeightRequest request,
         CancellationToken ct)

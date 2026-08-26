@@ -41,7 +41,7 @@ public static class SetsEndpoints
             handler.GetByCodeAsync(code, ct))
             .WithSummary("Get one set by its lower-case code.")
             .WithDescription("Returns set metadata plus a presigned URL for the set icon (if cached locally).")
-            .Produces<SetResponse>(StatusCodes.Status200OK)
+            .Produces<SetDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetSet");
 

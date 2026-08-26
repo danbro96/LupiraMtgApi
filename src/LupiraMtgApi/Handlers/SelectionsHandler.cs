@@ -37,7 +37,7 @@ public sealed class SelectionsHandler
         return selection is null ? TypedResults.NotFound() : TypedResults.Ok(selection);
     }
 
-    public async Task<Results<Ok<SelectionEntryResponse>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> AddCardAsync(
+    public async Task<Results<Ok<SelectionEntryDto>, NotFound, ProblemHttpResult, UnauthorizedHttpResult>> AddCardAsync(
         HttpContext httpContext,
         Guid selectionId,
         AddSelectionEntryRequest request,
