@@ -26,7 +26,7 @@ public static class DependencyTargets
         new DependencyTarget
         {
             Name = "garage",
-            BaseUrl = string.IsNullOrWhiteSpace(s3.HealthUrl) ? "" : s3.HealthUrl.TrimEnd('/') + "/",
+            BaseUrl = string.IsNullOrWhiteSpace(s3.HealthUrl) ? string.Empty : s3.HealthUrl.TrimEnd('/') + "/",
             ProbePath = "health",
         },
     ];

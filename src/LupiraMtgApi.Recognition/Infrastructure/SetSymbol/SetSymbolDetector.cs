@@ -1,6 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+
 namespace LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 
 public sealed class SetSymbolDetector

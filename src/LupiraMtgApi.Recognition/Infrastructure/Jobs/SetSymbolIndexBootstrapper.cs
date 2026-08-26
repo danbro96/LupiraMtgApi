@@ -1,4 +1,5 @@
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
+
 namespace LupiraMtgApi.Recognition.Infrastructure.Jobs;
 
 public sealed class SetSymbolIndexBootstrapper : IHostedService

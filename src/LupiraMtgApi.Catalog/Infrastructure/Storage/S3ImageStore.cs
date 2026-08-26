@@ -51,7 +51,8 @@ public sealed class S3ImageStore : IImageStore, IDisposable
 
     public async Task<string> PutAsync(string objectKey, Stream content, string contentType, CancellationToken ct)
     {
-        await _client.PutObjectAsync(new PutObjectRequest
+        await _client.PutObjectAsync(
+            new PutObjectRequest
         {
             BucketName = _options.Bucket,
             Key = objectKey,

@@ -1,5 +1,6 @@
 using LupiraMtgApi.Catalog.Data;
 using Microsoft.EntityFrameworkCore;
+
 namespace LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 
 /// <summary>

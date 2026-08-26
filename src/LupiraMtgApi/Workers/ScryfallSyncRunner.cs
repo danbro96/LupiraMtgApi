@@ -11,6 +11,7 @@ using LupiraMtgApi.Recognition.Infrastructure.Imaging;
 using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+
 namespace LupiraMtgApi.Workers;
 
 public sealed class ScryfallSyncRunner

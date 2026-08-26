@@ -4,7 +4,10 @@ namespace LupiraMtgApi.Dependencies;
 public sealed class DependencyTarget
 {
     public required string Name { get; set; }
+
     public required string BaseUrl { get; set; }
+
     public required string ProbePath { get; set; }
+
     public string? ApiKey { get; set; }
 }

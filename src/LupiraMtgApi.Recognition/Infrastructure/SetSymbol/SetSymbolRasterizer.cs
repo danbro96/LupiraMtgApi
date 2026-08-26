@@ -3,6 +3,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SkiaSharp;
 using Svg.Skia;
+
 namespace LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 
 public sealed class SetSymbolRasterizer

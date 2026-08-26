@@ -1,4 +1,5 @@
 using LupiraMtgApi.Recognition.Infrastructure.Imaging;
+
 namespace LupiraMtgApi.Recognition.Infrastructure.Jobs;
 
 public sealed class PHashIndexBootstrapper : IHostedService
@@ -17,7 +18,8 @@ public sealed class PHashIndexBootstrapper : IHostedService
         // Build in the background — startup should not wait on a 600k-row scan.
         // Until the index is loaded, ScanHandler degrades to OCR-only candidates
         // (PHashIndex.IsLoaded is false → empty pHash hits, OCR branch carries the recognition).
-        _ = Task.Run(async () =>
+        _ = Task.Run(
+            async () =>
         {
             try
             {

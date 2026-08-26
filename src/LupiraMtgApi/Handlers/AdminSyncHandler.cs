@@ -1,6 +1,7 @@
 using LupiraMtgApi.Dtos.Sync;
 using LupiraMtgApi.Workers;
 using Microsoft.AspNetCore.Http.HttpResults;
+
 namespace LupiraMtgApi.Handlers;
 
 public sealed class AdminSyncHandler

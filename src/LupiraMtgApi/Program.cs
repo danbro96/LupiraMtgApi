@@ -32,6 +32,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 using Weasel.Core;
+
 // `dotnet-getdocument` (Microsoft.Extensions.ApiDescription.Server's build-time
 // OpenAPI emitter) loads this assembly and runs Main() to obtain the document
 // provider — but it never calls `app.Run()`. When we detect that mode, we
@@ -192,9 +193,7 @@ builder.Services.AddOpenApi("v1", options =>
         // UnauthorizedHttpResult). UseStatusCodePages fills them at runtime, so declare the shape.
 
         foreach (var code in operation.Responses?.Keys.ToList() ?? [])
-
         {
-
             if (code.Length != 3 || code[0] is not ('4' or '5')) continue;
 
             var existing = operation.Responses![code];
@@ -202,9 +201,7 @@ builder.Services.AddOpenApi("v1", options =>
             if (existing.Content is { Count: > 0 }) continue;
 
             operation.Responses[code] = new OpenApiResponse
-
             { Description = existing.Description, Content = ProblemContent(context.Document) };
-
         }
 
         return Task.CompletedTask;
@@ -224,7 +221,7 @@ static void AddProblem(OpenApiOperation operation, OpenApiDocument document, int
     operation.Responses[code] = new OpenApiResponse { Description = description, Content = ProblemContent(document) };
 }
 
-/// RFC 9457. Declared here because nothing returns the CLR type directly, so the generator never emits it.
+// RFC 9457. Declared here because nothing returns the CLR type directly, so the generator never emits it.
 static OpenApiSchema ProblemDetailsSchema() => new()
 {
     Type = JsonSchemaType.Object,

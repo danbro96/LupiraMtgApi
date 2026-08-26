@@ -2,6 +2,7 @@ using LupiraMtgApi.Catalog.Domain;
 using LupiraMtgApi.Catalog.Dtos.Cards;
 using LupiraMtgApi.Catalog.Infrastructure.Storage;
 using LupiraMtgApi.Pricing.Dtos;
+
 namespace LupiraMtgApi.Catalog.Mappers;
 
 public sealed class CardPrintingMapper

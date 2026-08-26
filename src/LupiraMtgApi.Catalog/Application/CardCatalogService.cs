@@ -537,6 +537,7 @@ public sealed class CardCatalogService
         {
             return null;
         }
+
         // Npgsql is configured with EnableDynamicJson() in Program.cs, so jsonb columns
         // can be deserialized directly to a typed CLR list.
         return reader.GetFieldValue<List<CardFace>>(ord);

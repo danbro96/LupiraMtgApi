@@ -41,7 +41,7 @@ public sealed class SetService
         }
 
         var ascending = !string.Equals(order, "desc", StringComparison.OrdinalIgnoreCase);
-        query = (sort?.ToLowerInvariant()) switch
+        query = sort?.ToLowerInvariant() switch
         {
             "code" => ascending ? query.OrderBy(s => s.Code) : query.OrderByDescending(s => s.Code),
             "name" => ascending ? query.OrderBy(s => s.Name) : query.OrderByDescending(s => s.Name),

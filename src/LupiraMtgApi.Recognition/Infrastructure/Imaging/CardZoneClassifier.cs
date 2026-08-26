@@ -4,11 +4,33 @@ public sealed class CardZoneClassifier
 {
     // Cropped-card frame anatomy (proportional to a normalized standard MTG frame).
     // Tuned from the modern-frame layout; nudge from telemetry once we have it.
-    private const double NameYLo = 0.04, NameYHi = 0.10, NameXLo = 0.05, NameXHi = 0.78;
-    private const double TypeYLo = 0.555, TypeYHi = 0.605, TypeXLo = 0.05, TypeXHi = 0.78;
-    private const double RulesYLo = 0.62, RulesYHi = 0.88;
-    private const double PtYLo = 0.885, PtYHi = 0.925, PtXLo = 0.78, PtXHi = 0.96;
-    private const double MetaYLo = 0.91, MetaYHi = 0.97, MetaXLo = 0.03, MetaXHi = 0.40;
+    private const double NameYLo = 0.04;
+
+    // Cropped-card frame anatomy (proportional to a normalized standard MTG frame).
+    // Tuned from the modern-frame layout; nudge from telemetry once we have it.
+    private const double NameYHi = 0.10;
+
+    // Cropped-card frame anatomy (proportional to a normalized standard MTG frame).
+    // Tuned from the modern-frame layout; nudge from telemetry once we have it.
+    private const double NameXLo = 0.05;
+
+    // Cropped-card frame anatomy (proportional to a normalized standard MTG frame).
+    // Tuned from the modern-frame layout; nudge from telemetry once we have it.
+    private const double NameXHi = 0.78;
+    private const double TypeYLo = 0.555;
+    private const double TypeYHi = 0.605;
+    private const double TypeXLo = 0.05;
+    private const double TypeXHi = 0.78;
+    private const double RulesYLo = 0.62;
+    private const double RulesYHi = 0.88;
+    private const double PtYLo = 0.885;
+    private const double PtYHi = 0.925;
+    private const double PtXLo = 0.78;
+    private const double PtXHi = 0.96;
+    private const double MetaYLo = 0.91;
+    private const double MetaYHi = 0.97;
+    private const double MetaXLo = 0.03;
+    private const double MetaXHi = 0.40;
 
     // Expected centroid range of OCR regions on a well-cropped card. The topmost OCR
     // region is the Name centroid (~y=0.07 of card); the bottom-most is BottomMetadata
