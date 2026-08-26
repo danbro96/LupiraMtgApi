@@ -349,6 +349,11 @@ if (!isOpenApiBuild && app.Environment.IsDevelopment())
 }
 
 if (allowedOrigins.Length > 0) app.UseCors();
+app.UseExceptionHandler();
+// Fills the empty body of a bare 4xx (auth challenges, TypedResults.NotFound) with
+// ProblemDetails, so the spec's promise holds.
+app.UseStatusCodePages();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
