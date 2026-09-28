@@ -10,8 +10,8 @@ namespace LupiraMtgApi.Recognition.Application.Steps;
 /// (a) FlorenceApi's per-region rotation says the text is upside-down (weighted median in
 /// [135°,180°]∪[-180°,-135°]), or (b) the first pass is too weak to reach Medium
 /// (best OCR aggregate below <see cref="ScanScoringOptions.MediumMinOcrScore"/>). (b) catches
-/// upside-down cards Florence reads as upright gibberish, where (a) sees no rotation; it only
-/// costs the extra OCR pass on scans that would otherwise come back Low. The flipped pass
+/// upside-down cards Florence reads as upright gibberish, where (a) sees no rotation. (b) approximates the Medium gate
+/// in <see cref="ConfidenceStep"/> from pre-fusion scores, so it is not an exact match. The flipped pass
 /// replaces the first only when it scores better.
 /// </summary>
 public sealed class RotationRetryStep : IScanStep
@@ -57,12 +57,13 @@ public sealed class RotationRetryStep : IScanStep
         ctx.RootSpan?.SetTag("rotation.first_pass_best_ocr", firstBest);
         if (!upsideDown && !weakFirstPass)
         {
-            ctx.RootSpan?.SetTag("rotation.skipped_reason", "text_upright");
+            ctx.RootSpan?.SetTag("rotation.skipped_reason", "upright_and_strong");
             return ctx;
         }
 
+        var firstCoverage = ScanHelpers.ZoneCoverageScore(ctx.Zones);
         using var retrySpan = ScanTelemetry.Source.StartActivity("rotation.retry");
-        retrySpan?.SetTag("rotation.first_pass_score", ScanHelpers.ZoneCoverageScore(ctx.Zones));
+        retrySpan?.SetTag("rotation.first_pass_score", firstCoverage);
         retrySpan?.SetTag("rotation.trigger", upsideDown ? "upside_down" : "weak_first_pass");
         try
         {
@@ -88,8 +89,19 @@ public sealed class RotationRetryStep : IScanStep
             retrySpan?.SetTag("rotation.alt_pass_score", altCoverage);
 
             // Always sum both passes' latencies — telemetry should reflect the true cost.
-            var ocrLatencyMs = ctx.OcrLatencyMs;
-            var pHashLatencyMs = ctx.PHashLatencyMs + altPHash.LatencyMs;
+            var retried = ctx with
+            {
+                PHashLatencyMs = ctx.PHashLatencyMs + altPHash.LatencyMs,
+                RotationRetried = true,
+            };
+
+            // Rotation-signalled flips keep the old coverage tie-break (guards a Florence rotation misread);
+            // checked before the rescore, whose DB round-trips would be wasted on a pass that can't win.
+            if (upsideDown && altCoverage < firstCoverage)
+            {
+                retrySpan?.SetTag("rotation.alt_won", false);
+                return retried;
+            }
 
             CardZoneScoringResult altScoring;
             using (var rescoreSpan = ScanTelemetry.Source.StartActivity("zone.score.rescore"))
@@ -101,17 +113,13 @@ public sealed class RotationRetryStep : IScanStep
             var altBest = BestAggregate(altScoring);
             retrySpan?.SetTag("rotation.alt_pass_best_ocr", altBest);
 
-            // Rotation-signalled flips keep the old coverage tie-break (guards a Florence rotation misread);
-            // weak-pass flips must actually match better, or an unreadable upright card would swap in the
+            // Weak-pass flips must actually match better, or an unreadable upright card would swap in the
             // flipped pass's equally junk text.
-            var altWins = upsideDown
-                ? altCoverage >= ScanHelpers.ZoneCoverageScore(ctx.Zones) && altBest >= firstBest
-                : altBest > firstBest;
+            var altWins = upsideDown ? altBest >= firstBest : altBest > firstBest;
+            retrySpan?.SetTag("rotation.alt_won", altWins);
             if (altWins)
             {
-                retrySpan?.SetTag("rotation.alt_won", true);
-
-                return ctx with
+                return retried with
                 {
                     Preprocessed = new CardCropResult
                     {
@@ -129,19 +137,10 @@ public sealed class RotationRetryStep : IScanStep
                     ImageHash = altPHash.Hash,
                     PHashHits = altPHash.Hits,
                     ZoneScoring = altScoring,
-                    OcrLatencyMs = ocrLatencyMs,
-                    PHashLatencyMs = pHashLatencyMs,
-                    RotationRetried = true,
                 };
             }
 
-            retrySpan?.SetTag("rotation.alt_won", false);
-            return ctx with
-            {
-                OcrLatencyMs = ocrLatencyMs,
-                PHashLatencyMs = pHashLatencyMs,
-                RotationRetried = true,
-            };
+            return retried;
         }
         catch (Exception ex)
         {
