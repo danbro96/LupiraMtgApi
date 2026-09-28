@@ -41,7 +41,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
 
     <!-- Host composes Marten (store + sessions) and owns the cross-context Scryfall sync (Cronos schedule). -->
-    <PackageReference Include="Marten" Version="9.10.0" />
+    <PackageReference Include="Marten" Version="9.40.0" />
     <PackageReference Include="Cronos" Version="0.13.0" />
 
     <!-- EF Core tooling resolves the DbContext (in Catalog) through this startup project, so the
