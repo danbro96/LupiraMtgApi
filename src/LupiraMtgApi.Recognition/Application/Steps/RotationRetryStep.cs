@@ -6,10 +6,12 @@ using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 namespace LupiraMtgApi.Recognition.Application.Steps;
 
 /// <summary>
-/// Flips the crop 180° and re-runs OCR + pHash + symbol detection when either
-/// (a) FlorenceApi's per-region rotation says the text is upside-down (weighted median beyond ±135°), or
-/// (b) the best pre-fusion OCR aggregate is below <see cref="ScanScoringOptions.MediumMinOcrScore"/> — catches
-/// upside-down cards Florence reads as upright gibberish. The flipped pass replaces the first only when it scores better.
+/// Flips the crop 180° and re-runs OCR + pHash + symbol detection when
+/// (a) FlorenceApi's per-region rotation says the text is upside-down (weighted median beyond ±135°),
+/// (b) the best pre-fusion OCR aggregate is below <see cref="ScanScoringOptions.MediumMinOcrScore"/>, or
+/// (c) both the type line and the collector line are empty. (b) and (c) catch upside-down cards Florence reads as
+/// upright gibberish; (c) exists because that gibberish can still trigram-match a random card at 0.5–1.0, which
+/// defeats (b). The flipped pass replaces the first only when it scores better.
 /// </summary>
 public sealed class RotationRetryStep : IScanStep
 {
@@ -51,8 +53,9 @@ public sealed class RotationRetryStep : IScanStep
         var firstBest = firstScoring.BestAggregateScore;
         var weakFirstPass = firstBest < _scoring.MediumMinOcrScore;
         var upsideDown = IsTextUpsideDown(ctx.Regions, ctx.RootSpan);
+        var structureMissing = string.IsNullOrWhiteSpace(ctx.Zones.TypeLine) && string.IsNullOrWhiteSpace(ctx.Zones.BottomMetadata);
         ctx.RootSpan?.SetTag("rotation.first_pass_best_ocr", firstBest);
-        if (!upsideDown && !weakFirstPass)
+        if (!upsideDown && !weakFirstPass && !structureMissing)
         {
             ctx.RootSpan?.SetTag("rotation.skipped_reason", "upright_and_strong");
             return ctx;
@@ -61,7 +64,9 @@ public sealed class RotationRetryStep : IScanStep
         var firstCoverage = ScanHelpers.ZoneCoverageScore(ctx.Zones);
         using var retrySpan = ScanTelemetry.Source.StartActivity("rotation.retry");
         retrySpan?.SetTag("rotation.first_pass_score", firstCoverage);
-        retrySpan?.SetTag("rotation.trigger", upsideDown ? "upside_down" : "weak_first_pass");
+        retrySpan?.SetTag(
+            "rotation.trigger",
+            upsideDown ? "upside_down" : structureMissing ? "structure_missing" : "weak_first_pass");
         try
         {
             var altBytes = await ScanHelpers.Rotate180Async(preprocessed.Bytes, ct);
@@ -110,8 +115,12 @@ public sealed class RotationRetryStep : IScanStep
             retrySpan?.SetTag("rotation.alt_pass_best_ocr", altBest);
 
             // Weak-pass flips must actually match better, or an unreadable upright card would swap in the
-            // flipped pass's equally junk text.
-            var altWins = upsideDown ? altBest >= firstBest : altBest > firstBest;
+            // flipped pass's equally junk text. Structure-missing flips win on recovered zones instead: the junk
+            // first pass may have scored 1.0 against a random card, which a correct flipped pass can't beat.
+            var altWins = upsideDown
+                ? altBest >= firstBest
+                : altBest > firstBest
+                    || (structureMissing && altCoverage > firstCoverage && altBest >= _scoring.MediumMinOcrScore);
             retrySpan?.SetTag("rotation.alt_won", altWins);
             if (altWins)
             {

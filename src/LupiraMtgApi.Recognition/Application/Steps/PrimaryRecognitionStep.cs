@@ -111,7 +111,7 @@ public sealed class PrimaryRecognitionStep : IScanStep
         PHashOrientation.ShouldFlip(
             probe.UprightBest,
             probe.FlippedBest,
-            _scoring.PHashOrientationMaxDistance,
+            _scoring.PHashOrientationUprightMinDistance,
             _scoring.PHashOrientationMinMargin);
 
     private async Task<(int UprightBest, int FlippedBest)> ProbeOrientationAsync(byte[] imageBytes, Guid scanId)
