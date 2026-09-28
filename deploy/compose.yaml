@@ -20,12 +20,14 @@ services:
       Florence__Url: ${FLORENCE_URL:-http://florence-api:8080}
       Florence__ApiKey: ${FLORENCE_API_KEY:?required}
 
-      Minio__Endpoint: ${MINIO_ENDPOINT:-minio:9000}
-      Minio__PublicEndpoint: ${MINIO_PUBLIC_ENDPOINT:-https://s3.lupira.com}
-      Minio__AccessKey: ${MINIO_ACCESS_KEY:?required}
-      Minio__SecretKey: ${MINIO_SECRET_KEY:?required}
-      Minio__Bucket: ${MINIO_BUCKET:-lupira-mtg-cards}
-      Minio__UseSsl: ${MINIO_USE_SSL:-false}
+      # Any S3-compatible store; path-style addressing, presigned against S3__PublicUrl.
+      S3__ServiceUrl: ${S3_SERVICE_URL:-http://garage:3900}
+      S3__PublicUrl: ${S3_PUBLIC_URL:?required}
+      S3__HealthUrl: ${S3_HEALTH_URL:-}
+      S3__AccessKey: ${S3_ACCESS_KEY:?required}
+      S3__SecretKey: ${S3_SECRET_KEY:?required}
+      S3__Bucket: ${S3_BUCKET:-lupira-mtg-cards}
+      S3__Region: ${S3_REGION:-garage}
 
       RateLimit__RequestsPerMinute: ${RATE_LIMIT:-120}
 

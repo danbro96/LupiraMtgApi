@@ -27,7 +27,7 @@ there).
 | Reference data | EF Core 10 + Npgsql 10 (Scryfall catalog) |
 | User state | [Marten](https://martendb.com) 9.8 document store on Postgres |
 | Image / hashing | SkiaSharp 3.119, SixLabors.ImageSharp 3.1, CoenM.ImageHash, Svg.Skia 5.1 |
-| Object storage | Minio 7 client (any S3-compatible store) |
+| Object storage | AWSSDK.S3 4.0 (any S3-compatible store; deployed on Garage) |
 | OCR | external vision service over HTTP (e.g. a Florence-2 OCR endpoint) |
 | API docs | Microsoft.AspNetCore.OpenApi 10 + Scalar.AspNetCore 2.16 |
 | Scheduling | Cronos 0.13 (cron-driven sync) |
@@ -121,7 +121,7 @@ an empty database is fine. Then:
 ## Configuration
 
 All settings bind from `appsettings.json` and can be overridden by environment variables using the
-ASP.NET `__` (double-underscore) convention for nested keys (e.g. `Minio__Bucket`).
+ASP.NET `__` (double-underscore) convention for nested keys (e.g. `S3__Bucket`).
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -130,11 +130,12 @@ ASP.NET `__` (double-underscore) convention for nested keys (e.g. `Minio__Bucket
 | `Auth__Audience` | `lupira-mtg` | Required token `aud` (the public client id) |
 | `Florence__Url` | — | Base URL of the OCR/vision service |
 | `Florence__ApiKey` | — | API key for the OCR/vision service |
-| `Minio__Endpoint` | — | In-network object-store endpoint for uploads (e.g. `minio:9000`) |
-| `Minio__PublicEndpoint` | — | Public base URL used to build presigned card-art URLs |
-| `Minio__AccessKey` / `Minio__SecretKey` | — | Object-store credentials |
-| `Minio__Bucket` | `lupira-mtg-cards` | Bucket for card images and set icons |
-| `Minio__UseSsl` | `false` | TLS for the in-network upload path |
+| `S3__ServiceUrl` | — | In-network S3 endpoint for object operations (e.g. `http://garage:3900`) |
+| `S3__PublicUrl` | — | Public S3 endpoint presigned card-art URLs are signed against |
+| `S3__HealthUrl` | — | Anonymous store health endpoint for `/depz` (optional) |
+| `S3__AccessKey` / `S3__SecretKey` | — | Object-store credentials |
+| `S3__Bucket` | `lupira-mtg-cards` | Bucket for card images and set icons |
+| `S3__Region` | `garage` | Signing region; must match the store's configured region |
 | `Scan__Scoring__*` | see `appsettings.json` | Recognition scoring weights, cutoffs and confidence thresholds (production-sane defaults) |
 | `ScryfallSync__CronSchedule` | `0 4 * * *` | Cron schedule for the nightly catalog sync |
 | `RateLimit__RequestsPerMinute` | `120` | Per-caller token-bucket limit (keyed by `sub`, else IP) |
@@ -184,7 +185,7 @@ maintainer's own deployment; set the env vars from the [Configuration](#configur
 yours. The required secrets (`*_required` markers in the file) must be provided.
 
 ```bash
-LUPIRA_MTG_DB_PASSWORD=… FLORENCE_API_KEY=… MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=… \
+LUPIRA_MTG_DB_PASSWORD=… FLORENCE_API_KEY=… S3_PUBLIC_URL=… S3_ACCESS_KEY=… S3_SECRET_KEY=… \
   docker compose -f deploy/compose.yaml up -d
 ```
 
