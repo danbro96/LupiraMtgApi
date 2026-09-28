@@ -32,6 +32,21 @@ public sealed class ScanScoringOptions
 
     public double MediumCombined { get; set; } = 0.60;
 
+    /// <summary>
+    /// Minimum OCR aggregate the top candidate needs for Medium. pHash alone can't reach it: unrelated cards land
+    /// within a few bits of a phone capture, so a pHash-only top candidate is Low regardless of combined score.
+    /// </summary>
+    public double MediumMinOcrScore { get; set; } = 0.40;
+
+    /// <summary>Hamming distance at or below which a pHash hit scores 1.0.</summary>
+    public int PHashFullScoreDistance { get; set; } = 2;
+
+    /// <summary>
+    /// Hamming distance at or above which a pHash hit scores 0; linear in between. Phone captures put the right
+    /// card and unrelated ones alike at 6–8 bits, so the old <c>1 − d/64</c> (0.875 at 8) let noise outrank OCR.
+    /// </summary>
+    public int PHashZeroScoreDistance { get; set; } = 12;
+
     public double HighZoneAgreementMinScore { get; set; } = 0.70;
 
     public int HighZoneAgreementMinCount { get; set; } = 2;

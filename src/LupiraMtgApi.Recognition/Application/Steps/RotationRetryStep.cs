@@ -96,7 +96,7 @@ public sealed class RotationRetryStep : IScanStep
                 retrySpan?.SetTag("rotation.alt_won", true);
 
                 using var rescoreSpan = ScanTelemetry.Source.StartActivity("zone.score.rescore");
-                var altScoring = await _scorer.ScoreAsync(altZones, altSymbol, ct);
+                var altScoring = await _scorer.ScoreAsync(altZones, altSymbol, altPHash.Hits.Select(h => h.PrintingId), ct);
                 rescoreSpan?.SetTag("zone.candidate_count", altScoring.ByPrinting.Count);
 
                 return ctx with

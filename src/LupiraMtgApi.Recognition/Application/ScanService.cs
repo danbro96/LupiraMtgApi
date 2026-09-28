@@ -86,7 +86,7 @@ public sealed class ScanService
             CroppedHeight = ctx.Preprocessed?.Height ?? 0,
             OcrRegionCount = ctx.Regions.Regions.Count,
             PHashCandidateCount = ctx.PHashHits.Count,
-            OcrCandidateCount = ctx.ZoneScoring?.ByPrinting.Count ?? 0,
+            OcrCandidateCount = ctx.ZoneScoring?.ByPrinting.Values.Count(s => s.AggregateScore > 0) ?? 0,
             OcrLatencyMs = ctx.OcrLatencyMs,
             PHashLatencyMs = ctx.PHashLatencyMs,
         },

@@ -98,14 +98,19 @@ registration order in `AddRecognition`. The steps, in order:
    hash and full-card hash), taking the lower Hamming distance per candidate.
 4. **ZoneClassify** — call the external OCR service and classify text into card zones
    (`Name`, `TypeLine`, `RulesText`, `PowerToughness`, `BottomMetadata`).
-5. **ZoneScore** — score OCR text against the catalog via per-zone `pg_trgm` trigram queries.
+5. **ZoneScore** — score OCR text against the catalog via per-zone `pg_trgm` trigram queries. Only the
+   name query (and rules text, when the name finds nothing) searches the whole catalog; type line, rules
+   text, P/T and the collector line narrow the name + pHash pool. The collector line is parsed in both
+   the legacy (`229/254 R`, `THB • EN`) and 2023+ (`U 0163`, `LTR • EN`) layouts.
 6. **RotationRetry** — re-run upstream steps rotated when the first pass is weak (no-op otherwise).
-7. **Fusion** — combine the pHash and OCR signals into a single ranked candidate list (weights from
-   `Scan:Scoring`, e.g. `PHashWeight` / `OcrWeight`).
+7. **Fusion** — combine the pHash and OCR signals by probabilistic OR, `1 − (1 − ocr)(1 − phash)`. The
+   pHash score is 1.0 at ≤ `PHashFullScoreDistance` bits and falls linearly to 0 at
+   `PHashZeroScoreDistance` (`Scan:Scoring`).
 8. **SetTypeWeight** — bias candidates by their printing's set type (core/expansion up, funny down),
    using the live `set_type_weights` and an optional set-symbol detection boost.
 9. **Hydrate** — attach each candidate's printing metadata + presigned image URLs.
-10. **Confidence** — derive `High` / `Medium` / `Low` from combined scores and zone agreement.
+10. **Confidence** — derive `High` / `Medium` / `Low` from combined scores and zone agreement. Medium also
+    requires OCR support (`MediumMinOcrScore`), so a pHash-only top candidate is always Low.
 11. **RecordOutcome** / **PersistScanLog** — persist a `ScanLogDocument` (OCR zones, every candidate
     with sub-scores, set-symbol detection, latencies) to the `diagnostics` schema.
 

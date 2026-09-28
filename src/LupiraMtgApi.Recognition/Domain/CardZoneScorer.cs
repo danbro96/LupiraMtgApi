@@ -22,17 +22,6 @@ public sealed class CardZoneScorer
         @"(\*|\d+(?:\+\*)?)\s*[\/⁄]\s*(\*|\d+(?:\+\*)?)",
         RegexOptions.Compiled);
 
-    // Collector "229/254" plus optional rarity letter (only C/U/R/M/S are stamped on cards).
-    private static readonly Regex CollectorRegex = new(
-        @"(?<num>\d{1,4})\s*[\/]\s*(?<total>\d{1,4})\s*(?<rarity>[CURMS])?",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    // Set + lang line, e.g. "THB • EN" or "STD-EN". Accepts U+2022 bullet, U+00B7 middle
-    // dot, ASCII hyphen, U+2010, and U+2012.
-    private static readonly Regex SetLangRegex = new(
-        @"(?<set>[A-Z0-9]{2,5})\s*[•·\-‐‒]\s*(?<lang>[A-Z]{2,3})",
-        RegexOptions.Compiled);
-
     private readonly LupiraMtgDbContext _db;
     private readonly ScanScoringOptions _options;
 
@@ -42,16 +31,27 @@ public sealed class CardZoneScorer
         _options = options.Value;
     }
 
+    /// <param name="seedPrintingIds">
+    /// Candidates found by other means (pHash). Added to the pool after the name query so the narrowing zones
+    /// (type line, rules text, P/T, collector line) can confirm or refute them.
+    /// </param>
     public async Task<CardZoneScoringResult> ScoreAsync(
         CardZones zones,
         SetSymbolMatch? symbolMatch,
+        IEnumerable<string> seedPrintingIds,
         CancellationToken ct)
     {
         var byPrinting = new Dictionary<string, PrintingZoneScores>(StringComparer.Ordinal);
 
         await ScoreNameAsync(zones.Name, byPrinting, ct);
+        var nameFoundCandidates = byPrinting.Count > 0;
+        foreach (var id in seedPrintingIds)
+        {
+            GetOrAdd(byPrinting, id);
+        }
+
         await ScoreTypeLineAsync(zones.TypeLine, byPrinting, ct);
-        await ScoreRulesTextAsync(zones.RulesText, byPrinting, ct);
+        await ScoreRulesTextAsync(zones.RulesText, byPrinting, fullScan: !nameFoundCandidates, ct);
         await ScorePowerToughnessAsync(zones.PowerToughness, byPrinting, ct);
         await ScoreBottomMetadataAsync(zones.BottomMetadata, symbolMatch, byPrinting, ct);
 
@@ -107,11 +107,21 @@ public sealed class CardZoneScorer
             return;
         }
 
+        // Narrow-only: a type line like "Instant" ties thousands of printings at 1.0, so bootstrapping from it
+        // fills the pool with arbitrary cards. It only confirms candidates found by name or pHash.
+        if (byPrinting.Count == 0)
+        {
+            span?.SetTag("zone.skipped", "no_pool");
+            return;
+        }
+
         var trimmed = text.Trim();
+        var candidateIds = byPrinting.Keys.ToList();
         span?.SetTag("zone.input_length", trimmed.Length);
+        span?.SetTag("zone.pool_size", candidateIds.Count);
         var rows = await _db.CardPrintings
             .AsNoTracking()
-            .Where(p => p.TypeLineFull != null)
+            .Where(p => p.TypeLineFull != null && candidateIds.Contains(p.Id))
             .Select(p => new { p.Id, Score = EF.Functions.TrigramsSimilarity(p.TypeLineFull!, trimmed) })
             .Where(x => x.Score > _options.TypeLineCutoff)
             .OrderByDescending(x => x.Score)
@@ -129,7 +139,11 @@ public sealed class CardZoneScorer
         }
     }
 
-    private async Task ScoreRulesTextAsync(string text, Dictionary<string, PrintingZoneScores> byPrinting, CancellationToken ct)
+    private async Task ScoreRulesTextAsync(
+        string text,
+        Dictionary<string, PrintingZoneScores> byPrinting,
+        bool fullScan,
+        CancellationToken ct)
     {
         using var span = ZoneActivity.StartActivity("zone.score.rules_text");
         if (string.IsNullOrWhiteSpace(text))
@@ -155,15 +169,14 @@ public sealed class CardZoneScorer
         // subsequence and ignores the rest. Coalesce to OracleText so rows with a null RulesText (older sync, or
         // upstream missing printed_text) still score against canonical English oracle text.
         //
-        // Name and TypeLine run before this in ScoreAsync, so byPrinting already holds their candidates. Narrow
-        // the rules query to that pool when non-empty: ~80K rows → a typical 25-75 member pool drops latency from
-        // ~900ms to <50ms. Keep the full scan as fallback, since RulesText can be the only signal that finds a
-        // card with a garbled name (ink smear, foreign printing, …).
+        // Narrow to the name + pHash pool when the name query found something: ~80K rows → a typical 25-35
+        // member pool drops latency from ~900ms to <50ms. Full scan when the name found nothing, since RulesText
+        // can be the only signal that finds a card with a garbled name (ink smear, foreign printing, …).
         var query = _db.CardPrintings
             .AsNoTracking()
             .Where(p => p.RulesText != null || p.OracleText != null);
 
-        if (byPrinting.Count > 0)
+        if (!fullScan && byPrinting.Count > 0)
         {
             var candidateIds = byPrinting.Keys.ToList();
             query = query.Where(p => candidateIds.Contains(p.Id));
@@ -260,24 +273,20 @@ public sealed class CardZoneScorer
             return;
         }
 
-        var collectorMatch = CollectorRegex.Match(text);
-        if (!collectorMatch.Success)
+        var parsed = BottomMetadataParser.Parse(text);
+        if (parsed is null)
         {
-            span?.SetTag("zone.skipped", "no_collector_regex_match");
+            span?.SetTag("zone.skipped", "no_collector_number");
             return;
         }
 
-        var collectorNumber = collectorMatch.Groups["num"].Value.TrimStart('0');
-        if (string.IsNullOrEmpty(collectorNumber))
-        {
-            collectorNumber = collectorMatch.Groups["num"].Value;
-        }
-
-        var rarityLetter = collectorMatch.Groups["rarity"].Success ? collectorMatch.Groups["rarity"].Value.ToUpperInvariant() : null;
-
-        var setLangMatch = SetLangRegex.Match(text);
-        var setCode = setLangMatch.Success ? setLangMatch.Groups["set"].Value.ToLowerInvariant() : null;
-        var lang = setLangMatch.Success ? setLangMatch.Groups["lang"].Value.ToLowerInvariant() : null;
+        var collectorNumber = parsed.CollectorNumber;
+        var rarityName = parsed.Rarity;
+        var setCode = parsed.SetCode;
+        var lang = parsed.Lang;
+        span?.SetTag("zone.parsed_collector", collectorNumber);
+        span?.SetTag("zone.parsed_set", setCode);
+        span?.SetTag("zone.parsed_lang", lang);
 
         // Tier 0: symbol-derived set agrees with text-derived set → metadata is authoritative.
         if (symbolMatch is not null && setCode is not null
@@ -352,30 +361,37 @@ public sealed class CardZoneScorer
             }
         }
 
-        // Tier 2: collector number + rarity letter when set was unreadable. Skip when the
-        // OCR'd letter doesn't map to a known Scryfall rarity — guessing produces 0.6
-        // false-positives that poison the ranking.
-        if (rarityLetter is not null)
+        // Tier 2: collector number + rarity when set was unreadable. Pool members first — the global query is
+        // capped and unordered, so it can miss the right printing entirely when the pool already holds it.
+        if (rarityName is not null)
         {
-            var rarityName = MapRarityLetter(rarityLetter);
-            if (rarityName is not null)
+            var candidateIds = byPrinting.Keys.ToList();
+            var tier2 = candidateIds.Count > 0
+                ? await _db.CardPrintings
+                    .AsNoTracking()
+                    .Where(p => candidateIds.Contains(p.Id) && p.CollectorNumber == collectorNumber && p.Rarity == rarityName)
+                    .Select(p => p.Id)
+                    .ToListAsync(ct)
+                : [];
+
+            if (tier2.Count == 0)
             {
-                var tier2 = await _db.CardPrintings
+                tier2 = await _db.CardPrintings
                     .AsNoTracking()
                     .Where(p => p.CollectorNumber == collectorNumber && p.Rarity == rarityName)
                     .Take(50)
                     .Select(p => p.Id)
                     .ToListAsync(ct);
+            }
 
-                foreach (var id in tier2)
-                {
-                    GetOrAdd(byPrinting, id).BottomMetadataScore = 0.6;
-                }
+            foreach (var id in tier2)
+            {
+                GetOrAdd(byPrinting, id).BottomMetadataScore = 0.6;
+            }
 
-                if (tier2.Count > 0)
-                {
-                    return;
-                }
+            if (tier2.Count > 0)
+            {
+                return;
             }
         }
 
@@ -445,7 +461,7 @@ public sealed class CardZoneScorer
             TypeLinePresent = !string.IsNullOrWhiteSpace(zones.TypeLine),
             RulesTextPresent = !string.IsNullOrWhiteSpace(zones.RulesText) && zones.RulesText.Trim().Length >= 12,
             PowerToughnessPresent = !string.IsNullOrWhiteSpace(zones.PowerToughness) && PowerToughnessRegex.IsMatch(zones.PowerToughness.Trim()),
-            BottomMetadataPresent = !string.IsNullOrWhiteSpace(zones.BottomMetadata) && CollectorRegex.IsMatch(zones.BottomMetadata),
+            BottomMetadataPresent = BottomMetadataParser.Parse(zones.BottomMetadata) is not null,
         };
 
         // Smooth zone weights by per-zone OCR confidence: effective = base * (floor + (1-floor)*confidence).
@@ -476,18 +492,5 @@ public sealed class CardZoneScorer
         }
 
         return existing;
-    }
-
-    private static string? MapRarityLetter(string letter)
-    {
-        return letter switch
-        {
-            "C" => "common",
-            "U" => "uncommon",
-            "R" => "rare",
-            "M" => "mythic",
-            "S" => "special",
-            _ => null,
-        };
     }
 }

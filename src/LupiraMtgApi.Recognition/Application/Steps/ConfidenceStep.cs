@@ -46,7 +46,8 @@ public sealed class ConfidenceStep : IScanStep
             }
         }
 
-        if (best.CombinedScore >= _scoring.MediumCombined)
+        var topOcr = ctx.HydratedRows.Count > 0 ? ctx.HydratedRows[0].ZoneScores?.AggregateScore ?? 0.0 : 0.0;
+        if (best.CombinedScore >= _scoring.MediumCombined && topOcr >= _scoring.MediumMinOcrScore)
         {
             return RecognitionConfidence.Medium;
         }

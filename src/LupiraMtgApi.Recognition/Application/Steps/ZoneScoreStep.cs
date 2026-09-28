@@ -22,7 +22,7 @@ public sealed class ZoneScoreStep : IScanStep
     public async Task<ScanContext> ExecuteAsync(ScanContext ctx, CancellationToken ct)
     {
         using var span = ScanTelemetry.Source.StartActivity("zone.score");
-        var scoring = await _scorer.ScoreAsync(ctx.Zones, ctx.SymbolMatch, ct);
+        var scoring = await _scorer.ScoreAsync(ctx.Zones, ctx.SymbolMatch, ctx.PHashHits.Select(h => h.PrintingId), ct);
         span?.SetTag("zone.candidate_count", scoring.ByPrinting.Count);
         span?.SetTag("zone.weights_total", scoring.Weights.TotalPresent);
         return ctx with { ZoneScoring = scoring };

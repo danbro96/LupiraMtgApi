@@ -5,7 +5,7 @@ namespace LupiraMtgApi.Recognition.Application.Steps;
 /// <summary>
 /// Merges per-zone OCR scores with pHash hits into a per-printing <see cref="RankedCandidate"/> dictionary, then
 /// computes FinalScore by treating pHash and OCR as independent likelihood signals combined via probabilistic OR:
-/// <c>1 − (1 − ocrScore) × (1 − hammingScore)</c>. Monotonic in each input, so a corroborating signal can never
+/// <c>1 − (1 − ocrScore) × (1 − hammingScore)</c>, with hammingScore from <see cref="PHashScore.FromDistance"/>. Monotonic in each input, so a corroborating signal can never
 /// lower a candidate's score — an OCR-only candidate can no longer outrank an OCR+pHash one of the same oracle.
 /// Parameter-free: <c>PHashWeight</c> and <c>OcrWeight</c> on <see cref="ScanScoringOptions"/> are unused by
 /// fusion and remain only as no-op config keys for backward compatibility.
@@ -48,7 +48,7 @@ public sealed class FusionStep : IScanStep
             }
 
             row.HammingDistance = hit.Distance;
-            row.HammingScore = Math.Clamp(1.0 - (hit.Distance / 64.0), 0.0, 1.0);
+            row.HammingScore = PHashScore.FromDistance(hit.Distance, _scoring.PHashFullScoreDistance, _scoring.PHashZeroScoreDistance);
         }
 
         foreach (var row in byPrinting.Values)
