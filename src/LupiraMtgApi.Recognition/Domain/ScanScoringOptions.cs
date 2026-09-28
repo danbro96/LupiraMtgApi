@@ -2,10 +2,6 @@ namespace LupiraMtgApi.Recognition.Domain;
 
 public sealed class ScanScoringOptions
 {
-    public double PHashWeight { get; set; } = 0.45;
-
-    public double OcrWeight { get; set; } = 0.55;
-
     public double NameWeight { get; set; } = 0.40;
 
     public double TypeLineWeight { get; set; } = 0.10;
@@ -43,7 +39,7 @@ public sealed class ScanScoringOptions
 
     /// <summary>
     /// Hamming distance at or above which a pHash hit scores 0; linear in between. Phone captures put the right
-    /// card and unrelated ones alike at 6–8 bits, so the old <c>1 − d/64</c> (0.875 at 8) let noise outrank OCR.
+    /// card and unrelated ones alike at 6–8 bits, so a wide curve lets pHash noise outrank OCR.
     /// </summary>
     public int PHashZeroScoreDistance { get; set; } = 12;
 

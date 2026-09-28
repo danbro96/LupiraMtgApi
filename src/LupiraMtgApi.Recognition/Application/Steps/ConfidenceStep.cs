@@ -34,20 +34,19 @@ public sealed class ConfidenceStep : IScanStep
         }
 
         var best = ctx.Ranked[0];
+        var topZoneScores = ctx.HydratedRows.Count > 0 ? ctx.HydratedRows[0].ZoneScores : null;
 
         if (best.CombinedScore >= _scoring.HighCombined && ctx.HydratedRows.Count > 0)
         {
-            var topRow = ctx.HydratedRows[0];
-            var contributing = topRow.ZoneScores?.ContributingZoneCount(_scoring.HighZoneAgreementMinScore) ?? 0;
+            var contributing = topZoneScores?.ContributingZoneCount(_scoring.HighZoneAgreementMinScore) ?? 0;
             if (contributing >= _scoring.HighZoneAgreementMinCount
-                && HasConfidentContributingZone(topRow.ZoneScores, ctx.Zones))
+                && HasConfidentContributingZone(topZoneScores, ctx.Zones))
             {
                 return RecognitionConfidence.High;
             }
         }
 
-        var topOcr = ctx.HydratedRows.Count > 0 ? ctx.HydratedRows[0].ZoneScores?.AggregateScore ?? 0.0 : 0.0;
-        if (best.CombinedScore >= _scoring.MediumCombined && topOcr >= _scoring.MediumMinOcrScore)
+        if (best.CombinedScore >= _scoring.MediumCombined && (topZoneScores?.AggregateScore ?? 0.0) >= _scoring.MediumMinOcrScore)
         {
             return RecognitionConfidence.Medium;
         }

@@ -78,7 +78,7 @@ public static partial class BottomMetadataParser
         _ => null,
     };
 
-    [GeneratedRegex(@"(?<num>\d{1,4})\s*/\s*(?<total>\d{1,4})\s*(?<rarity>[CURMS])?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<num>\d{1,4})\s*/\s*\d{1,4}\s*(?<rarity>[CURMS])?", RegexOptions.IgnoreCase)]
     private static partial Regex LegacyCollectorRegex();
 
     [GeneratedRegex(@"\b(?<rarity>[CURMSL])\s*(?<num>\d{3,4})\b")]
