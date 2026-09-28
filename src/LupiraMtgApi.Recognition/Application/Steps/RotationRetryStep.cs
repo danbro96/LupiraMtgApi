@@ -6,13 +6,13 @@ using LupiraMtgApi.Recognition.Infrastructure.SetSymbol;
 namespace LupiraMtgApi.Recognition.Application.Steps;
 
 /// <summary>
-/// When the cropper rotated 90° from a landscape original, FlorenceApi's per-region
-/// rotation tells us whether the resulting portrait is right-side up. If the median
-/// region rotation lands in [135°,180°]∪[-180°,-135°] the text is upside-down and the
-/// CW pick was wrong — flip 180° and re-run OCR + pHash + symbol detection. The
-/// rotation signal replaced the earlier "low coverage = retry" heuristic, which paid a
-/// full extra OCR pass on every borderline scan; we now skip the retry entirely when
-/// the text reads upright.
+/// Flips the crop 180° and re-runs OCR + pHash + symbol detection when either
+/// (a) FlorenceApi's per-region rotation says the text is upside-down (weighted median in
+/// [135°,180°]∪[-180°,-135°]), or (b) the first pass is too weak to reach Medium
+/// (best OCR aggregate below <see cref="ScanScoringOptions.MediumMinOcrScore"/>). (b) catches
+/// upside-down cards Florence reads as upright gibberish, where (a) sees no rotation; it only
+/// costs the extra OCR pass on scans that would otherwise come back Low. The flipped pass
+/// replaces the first only when it scores better.
 /// </summary>
 public sealed class RotationRetryStep : IScanStep
 {
@@ -21,6 +21,7 @@ public sealed class RotationRetryStep : IScanStep
     private readonly SetSymbolDetector _symbolDetector;
     private readonly CardZoneClassifier _classifier;
     private readonly CardZoneScorer _scorer;
+    private readonly ScanScoringOptions _scoring;
     private readonly ILogger<RotationRetryStep> _logger;
 
     public RotationRetryStep(
@@ -29,6 +30,7 @@ public sealed class RotationRetryStep : IScanStep
         SetSymbolDetector symbolDetector,
         CardZoneClassifier classifier,
         CardZoneScorer scorer,
+        IOptions<ScanScoringOptions> scoring,
         ILogger<RotationRetryStep> logger)
     {
         _pHash = pHash;
@@ -36,6 +38,7 @@ public sealed class RotationRetryStep : IScanStep
         _symbolDetector = symbolDetector;
         _classifier = classifier;
         _scorer = scorer;
+        _scoring = scoring.Value;
         _logger = logger;
     }
 
@@ -45,15 +48,14 @@ public sealed class RotationRetryStep : IScanStep
     {
         var preprocessed = ctx.Preprocessed
             ?? throw new InvalidOperationException("RotationRetryStep requires CropStep to have run first.");
-        _ = ctx.ZoneScoring
+        var firstScoring = ctx.ZoneScoring
             ?? throw new InvalidOperationException("RotationRetryStep requires ZoneScoreStep to have run first.");
 
-        if (!preprocessed.Rotated)
-        {
-            return ctx;   // not rotated → no rotation ambiguity to resolve
-        }
-
-        if (!IsTextUpsideDown(ctx.Regions, ctx.RootSpan))
+        var firstBest = BestAggregate(firstScoring);
+        var weakFirstPass = firstBest < _scoring.MediumMinOcrScore;
+        var upsideDown = IsTextUpsideDown(ctx.Regions, ctx.RootSpan);
+        ctx.RootSpan?.SetTag("rotation.first_pass_best_ocr", firstBest);
+        if (!upsideDown && !weakFirstPass)
         {
             ctx.RootSpan?.SetTag("rotation.skipped_reason", "text_upright");
             return ctx;
@@ -61,6 +63,7 @@ public sealed class RotationRetryStep : IScanStep
 
         using var retrySpan = ScanTelemetry.Source.StartActivity("rotation.retry");
         retrySpan?.SetTag("rotation.first_pass_score", ScanHelpers.ZoneCoverageScore(ctx.Zones));
+        retrySpan?.SetTag("rotation.trigger", upsideDown ? "upside_down" : "weak_first_pass");
         try
         {
             var altBytes = await ScanHelpers.Rotate180Async(preprocessed.Bytes, ct);
@@ -88,16 +91,25 @@ public sealed class RotationRetryStep : IScanStep
             var ocrLatencyMs = ctx.OcrLatencyMs;
             var pHashLatencyMs = ctx.PHashLatencyMs + altPHash.LatencyMs;
 
-            // Coverage is the tie-breaker: rotation said the original was upside-down, but if
-            // the flipped pass somehow extracts strictly less text we keep the original to
-            // protect against a Florence rotation misread.
-            if (altCoverage >= ScanHelpers.ZoneCoverageScore(ctx.Zones))
+            CardZoneScoringResult altScoring;
+            using (var rescoreSpan = ScanTelemetry.Source.StartActivity("zone.score.rescore"))
+            {
+                altScoring = await _scorer.ScoreAsync(altZones, altSymbol, altPHash.Hits.Select(h => h.PrintingId), ct);
+                rescoreSpan?.SetTag("zone.candidate_count", altScoring.ByPrinting.Count);
+            }
+
+            var altBest = BestAggregate(altScoring);
+            retrySpan?.SetTag("rotation.alt_pass_best_ocr", altBest);
+
+            // Rotation-signalled flips keep the old coverage tie-break (guards a Florence rotation misread);
+            // weak-pass flips must actually match better, or an unreadable upright card would swap in the
+            // flipped pass's equally junk text.
+            var altWins = upsideDown
+                ? altCoverage >= ScanHelpers.ZoneCoverageScore(ctx.Zones) && altBest >= firstBest
+                : altBest > firstBest;
+            if (altWins)
             {
                 retrySpan?.SetTag("rotation.alt_won", true);
-
-                using var rescoreSpan = ScanTelemetry.Source.StartActivity("zone.score.rescore");
-                var altScoring = await _scorer.ScoreAsync(altZones, altSymbol, altPHash.Hits.Select(h => h.PrintingId), ct);
-                rescoreSpan?.SetTag("zone.candidate_count", altScoring.ByPrinting.Count);
 
                 return ctx with
                 {
@@ -128,6 +140,7 @@ public sealed class RotationRetryStep : IScanStep
             {
                 OcrLatencyMs = ocrLatencyMs,
                 PHashLatencyMs = pHashLatencyMs,
+                RotationRetried = true,
             };
         }
         catch (Exception ex)
@@ -139,6 +152,9 @@ public sealed class RotationRetryStep : IScanStep
     }
 
     private const double RotationConfidenceFloor = 0.4;
+
+    private static double BestAggregate(CardZoneScoringResult scoring) =>
+        scoring.ByPrinting.Count == 0 ? 0.0 : scoring.ByPrinting.Values.Max(s => s.AggregateScore);
 
     private static bool IsTextUpsideDown(OcrRegions regions, System.Diagnostics.Activity? rootSpan)
     {
