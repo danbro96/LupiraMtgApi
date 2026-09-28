@@ -96,6 +96,8 @@ registration order in `AddRecognition`. The steps, in order:
 2. **Crop** — detect and normalize the card rectangle (Sobel-based `CardCropService`).
 3. **PrimaryRecognition** — perceptual-hash the crop and search two in-memory BK-trees (art-crop
    hash and full-card hash), taking the lower Hamming distance per candidate.
+   A full-card pHash probe of both orientations can flip an upside-down crop before OCR
+   (`PHashOrientationMode`: `Off` / `Shadow` = trace tags only / `Flip`).
 4. **ZoneClassify** — call the external OCR service and classify text into card zones
    (`Name`, `TypeLine`, `RulesText`, `PowerToughness`, `BottomMetadata`).
 5. **ZoneScore** — score OCR text against the catalog with `pg_trgm` in two phases. First build the

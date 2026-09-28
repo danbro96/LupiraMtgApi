@@ -171,6 +171,31 @@ public sealed class ScanPHashRunner
     }
 
     /// <summary>
+    /// Best full-card distance for the crop as-is and rotated 180° (<see cref="int.MaxValue"/> = no hit within
+    /// <see cref="ScanScoringOptions.FullCardPHashMaxHamming"/>, or index not loaded). Cheap enough (~100 ms) to
+    /// run before OCR and decide which way up to send the crop.
+    /// </summary>
+    public Task<(int UprightBest, int FlippedBest)> ProbeOrientationAsync(byte[] imageBytes)
+    {
+        return Task.Run(() =>
+        {
+            if (!_fullCardPHashIndex.IsLoaded)
+            {
+                return (int.MaxValue, int.MaxValue);
+            }
+
+            var maxHamming = _scoring.FullCardPHashMaxHamming;
+            using var img = Image.Load<Rgba32>(imageBytes);
+            var upright = BestDistance(_fullCardPHashIndex.Search(_pHash.Compute(img), maxHamming));
+            img.Mutate(ctx => ctx.Rotate(RotateMode.Rotate180));
+            var flipped = BestDistance(_fullCardPHashIndex.Search(_pHash.Compute(img), maxHamming));
+            return (upright, flipped);
+        });
+    }
+
+    private static int BestDistance(IReadOnlyList<PHashIndex.PHashHit> hits) => hits.Count > 0 ? hits[0].Distance : int.MaxValue;
+
+    /// <summary>
     /// Hashes an image, optionally also its 180° rotation, and returns whichever
     /// side produced the lower best-hamming hit.
     /// </summary>

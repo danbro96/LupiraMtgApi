@@ -41,6 +41,14 @@ public sealed class ScanScoringOptions
     /// </summary>
     public int PHashZeroScoreDistance { get; set; } = 12;
 
+    public PHashOrientationMode PHashOrientationMode { get; set; } = PHashOrientationMode.Shadow;
+
+    /// <summary>Best full-card distance the flipped side must reach for the orientation probe to flip.</summary>
+    public int PHashOrientationMaxDistance { get; set; } = 4;
+
+    /// <summary>Bits by which the flipped side must beat the upright side for the orientation probe to flip.</summary>
+    public int PHashOrientationMinMargin { get; set; } = 4;
+
     public double HighZoneAgreementMinScore { get; set; } = 0.70;
 
     public int HighZoneAgreementMinCount { get; set; } = 2;
