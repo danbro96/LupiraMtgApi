@@ -20,8 +20,6 @@ public sealed class ScanScoringOptions
 
     public int NameTopK { get; set; } = 25;
 
-    public int TypeLineTopK { get; set; } = 50;
-
     public int RulesTextTopK { get; set; } = 50;
 
     public double HighCombined { get; set; } = 0.85;

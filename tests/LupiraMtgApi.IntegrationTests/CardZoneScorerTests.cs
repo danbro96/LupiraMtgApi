@@ -60,6 +60,29 @@ public sealed class CardZoneScorerTests(MtgApiTestFactory factory) : IAsyncLifet
         Assert.True(entish.ContributingZoneCount(0.7) >= 2);
     }
 
+    [Fact]
+    public async Task Printing_found_by_collector_line_is_scored_on_every_zone()
+    {
+        var zones = Zones("U 0163 LTR . EN");
+        zones.Name = "zzzz";
+
+        var result = await Score(zones, seeds: []);
+
+        var entish = result.ByPrinting[Entish];
+        Assert.Equal(1.0, entish.BottomMetadataScore, precision: 3);
+        Assert.Equal(1.0, entish.TypeLineScore, precision: 3);
+        Assert.DoesNotContain(result.ByPrinting.Keys, id => id.StartsWith("test-instant-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Collector_number_alone_scores_pool_members_only()
+    {
+        var result = await Score(Zones("163/281"), seeds: [Meldweb]);
+
+        Assert.Equal(0.3, result.ByPrinting[Entish].BottomMetadataScore, precision: 3);
+        Assert.Equal(0.0, result.ByPrinting[Meldweb].BottomMetadataScore, precision: 3);
+    }
+
     private async Task<CardZoneScoringResult> Score(CardZones zones, IEnumerable<string> seeds)
     {
         using var scope = factory.Services.CreateScope();

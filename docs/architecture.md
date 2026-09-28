@@ -98,10 +98,12 @@ registration order in `AddRecognition`. The steps, in order:
    hash and full-card hash), taking the lower Hamming distance per candidate.
 4. **ZoneClassify** — call the external OCR service and classify text into card zones
    (`Name`, `TypeLine`, `RulesText`, `PowerToughness`, `BottomMetadata`).
-5. **ZoneScore** — score OCR text against the catalog via per-zone `pg_trgm` trigram queries. Only the
-   name query (and rules text, when the name finds nothing) searches the whole catalog; type line, rules
-   text, P/T and the collector line narrow the name + pHash pool. The collector line is parsed in both
-   the legacy (`229/254 R`, `THB • EN`) and 2023+ (`U 0163`, `LTR • EN`) layouts.
+5. **ZoneScore** — score OCR text against the catalog with `pg_trgm` in two phases. First build the
+   candidate pool: name matches, pHash seeds, rules-text matches (full scan only when the name finds
+   nothing), and collector-line matches (set + number + language, or number + rarity). Then score every
+   zone (name, type line, rules text, P/T, collector line) over that pool in one query, so a candidate
+   is scored the same whichever zone found it. The collector line is parsed in both the legacy
+   (`229/254 R`, `THB • EN`) and 2023+ (`U 0163`, `LTR • EN`) layouts.
 6. **RotationRetry** — re-run upstream steps rotated when the first pass is weak (no-op otherwise).
 7. **Fusion** — combine the pHash and OCR signals by probabilistic OR, `1 − (1 − ocr)(1 − phash)`. The
    pHash score is 1.0 at ≤ `PHashFullScoreDistance` bits and falls linearly to 0 at
