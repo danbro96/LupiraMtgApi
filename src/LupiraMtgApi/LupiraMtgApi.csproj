@@ -6,7 +6,7 @@
   <!--
     Emit the OpenAPI document at build time so the JSON spec stays in lockstep
     with the actual Map* endpoint definitions. The committed file at
-    `openapi/v1.json` (relative to the repo root) is what LupiraMobile and
+    `openapi/v1.json` (relative to the repo root) is what LupiraMtgMobile and
     LupiraWeb run Orval against — no need to spin up the server to refresh it.
   -->
   <PropertyGroup>
